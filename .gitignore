@@ -19,7 +19,7 @@ yarn-error.log*
 # env files (contains secrets - never push!)
 .env*
 env.txt
-
+envs.txt
 # vercel
 .vercel
 
