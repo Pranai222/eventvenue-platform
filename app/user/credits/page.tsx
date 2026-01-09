@@ -52,7 +52,7 @@ export default function CreditsPage() {
             setProfile(profileData as UserProfile)
 
             // Load transactions (mock data for now - replace with actual API)
-            // const txData = await axios.get(`http://localhost:8080/api/credit-transactions/user/${profileData.userId || profileData.id}`)
+            // const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"; const txData = await axios.get(`${API_URL}/api/credit-transactions/user/${profileData.userId || profileData.id}`)
             // setTransactions(txData.data)
         } catch (error) {
             console.error("Failed to load data:", error)
