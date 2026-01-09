@@ -40,7 +40,7 @@ export function RequestCreditsModal({ isOpen, onClose, userId, onSuccess }: Requ
             setIsLoading(true)
             setError(null)
 
-            const response = await axios.post('http://localhost:8080/api/credit-requests/submit', {
+            const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"; const response = await axios.post(`${API_URL}/api/credit-requests/submit`, {
                 userId,
                 pointsRequested: points,
                 reason: reason.trim()

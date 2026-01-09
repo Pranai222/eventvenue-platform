@@ -95,7 +95,7 @@ export function VendorBuyCreditsModal({ isOpen, onClose, vendorId, onSuccess }: 
 
                                 // Send to backend to credit points
                                 const response = await axios.post(
-                                    'http://localhost:8080/api/vendor/points/purchase',
+                                    (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080") + '/api/vendor/points/purchase',
                                     {
                                         points: points,
                                         amount: parseFloat(amount),

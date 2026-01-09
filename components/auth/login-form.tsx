@@ -63,7 +63,7 @@ export function LoginForm({ role }: LoginFormProps) {
       } else if (errorMsg.toLowerCase().includes("verify your email")) {
         setError("Please verify your email first before logging in. Check your email for the verification link.")
       } else if (errorMsg.toLowerCase().includes("connection") || errorMsg.toLowerCase().includes("timeout")) {
-        setError("Unable to connect to server. Please ensure the backend is running at http://localhost:8080")
+        setError("Unable to connect to server. Please check your internet connection and try again.")
       } else {
         setError(errorMsg)
       }

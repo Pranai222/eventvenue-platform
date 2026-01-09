@@ -97,7 +97,7 @@ export function SignupForm({ role, onSignupSuccess }: SignupFormProps) {
     } catch (err: any) {
       const errorMessage = err.message || "Signup failed. Please try again."
       if (errorMessage.toLowerCase().includes("connection") || errorMessage.toLowerCase().includes("timeout")) {
-        setError("Unable to connect to server. Please ensure the backend is running at http://localhost:8080")
+        setError("Unable to connect to server. Please check your internet connection and try again.")
       } else {
         setError(errorMessage)
       }

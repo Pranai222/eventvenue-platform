@@ -69,9 +69,10 @@ export function WithdrawFundsModal({ isOpen, onClose, userId, currentPoints, onS
         try {
             setIsLoading(true)
             setError(null)
+            const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"
 
             const response = await axios.post(
-                'http://localhost:8080/api/withdrawals/submit',
+                `${API_URL}/api/withdrawals/submit`,
                 { userId, pointsAmount: parseInt(pointsAmount) },
                 getAuthHeaders()
             )
@@ -110,10 +111,11 @@ export function WithdrawFundsModal({ isOpen, onClose, userId, currentPoints, onS
         try {
             setIsLoading(true)
             setError(null)
+            const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080"
 
             // Submit withdrawal request
             const submitResponse = await axios.post(
-                'http://localhost:8080/api/withdrawals/submit',
+                `${API_URL}/api/withdrawals/submit`,
                 { userId, pointsAmount: parseInt(pointsAmount) },
                 getAuthHeaders()
             )
@@ -123,7 +125,7 @@ export function WithdrawFundsModal({ isOpen, onClose, userId, currentPoints, onS
             if (withdrawalId && !submitResponse.data.withdrawal.requiresApproval) {
                 // Process immediately
                 const processResponse = await axios.post(
-                    `http://localhost:8080/api/withdrawals/process/${withdrawalId}`,
+                    `${API_URL}/api/withdrawals/process/${withdrawalId}`,
                     { cardLast4: cardNumber.replace(/\s/g, '').slice(-4) },
                     getAuthHeaders()
                 )
