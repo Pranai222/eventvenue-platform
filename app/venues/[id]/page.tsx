@@ -12,7 +12,7 @@ import { ImageGallery } from "@/components/ImageGallery"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Calendar, MapPin, Users, Star, ArrowLeft, Wifi, Coffee, Utensils } from "lucide-react"
+import { Calendar, MapPin, Users, Star, ArrowLeft, Wifi, Coffee, Utensils, Phone, Mail, Building2 } from "lucide-react"
 import type { Venue } from "@/lib/types/booking"
 import ViewLocationMap from "@/components/view-location-map"
 
@@ -141,11 +141,49 @@ export default function VenueDetailPage() {
                 {venue.featured && <Badge variant="secondary">Featured</Badge>}
               </div>
 
-              <div className="prose max-w-none">
-                <h2 className="text-2xl font-semibold mb-3">About This Venue</h2>
-                <p className="text-muted-foreground leading-relaxed">{venue.description}</p>
-              </div>
+              <h2 className="text-2xl font-semibold mb-3">About This Venue</h2>
+              <p className="text-muted-foreground leading-relaxed">{venue.description}</p>
             </div>
+
+            {/* Host Information */}
+            {(venue.vendorBusinessName || venue.vendorBusinessPhone || venue.vendorEmail) && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Building2 className="h-5 w-5 text-primary" />
+                    Hosted by {venue.vendorBusinessName || "Vendor"}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {venue.vendorBusinessPhone && (
+                    <div className="flex items-center gap-3 text-muted-foreground">
+                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <Phone className="h-4 w-4 text-primary" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium text-foreground">Phone</p>
+                        <p className="text-sm hover:text-primary transition-colors">
+                          <a href={`tel:${venue.vendorBusinessPhone}`}>{venue.vendorBusinessPhone}</a>
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  {venue.vendorEmail && (
+                    <div className="flex items-center gap-3 text-muted-foreground">
+                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <Mail className="h-4 w-4 text-primary" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium text-foreground">Email</p>
+                        <p className="text-sm hover:text-primary transition-colors">
+                          <a href={`mailto:${venue.vendorEmail}`}>{venue.vendorEmail}</a>
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
             {/* Amenities */}
             {venue.amenities.length > 0 && (

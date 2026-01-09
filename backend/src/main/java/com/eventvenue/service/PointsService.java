@@ -52,8 +52,12 @@ public class PointsService {
                 .build();
         pointHistoryRepository.save(history);
         
-        // Send email notification
-        sendPointsEmail(user, -points.intValue(), "Redeemed", reason, newPoints.intValue());
+        // NOTE: Individual email DISABLED for booking-related deductions
+        // BookingService now sends consolidated invoice email with all details
+        // Only send email for non-booking related deductions (when bookingId is null)
+        if (bookingId == null) {
+            sendPointsEmail(user, -points.intValue(), "Redeemed", reason, newPoints.intValue());
+        }
 
         return true;
     }
@@ -80,8 +84,10 @@ public class PointsService {
                 .build();
         pointHistoryRepository.save(history);
         
-        // Send email notification
-        sendPointsEmail(user, points.intValue(), "Earned", reason, newPoints.intValue());
+        // NOTE: Only send email for non-booking related additions (welcome bonus, etc.)
+        if (bookingId == null) {
+            sendPointsEmail(user, points.intValue(), "Earned", reason, newPoints.intValue());
+        }
     }
 
     @Transactional
@@ -106,8 +112,8 @@ public class PointsService {
                 .build();
         pointHistoryRepository.save(history);
         
-        // Send email notification
-        sendPointsEmail(user, points.intValue(), "Refunded", reason, newPoints.intValue());
+        // NOTE: Individual email DISABLED for booking cancellation refunds
+        // BookingService sends consolidated cancellation invoice email instead
     }
 
     @Transactional

@@ -11,7 +11,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/withdrawals")
-@CrossOrigin(origins = "*")
+@CrossOrigin(origins = {"http://localhost:3000", "http://localhost:8000"})
 public class WithdrawalController {
 
     private final WithdrawalService withdrawalService;
@@ -30,6 +30,7 @@ public class WithdrawalController {
         try {
             Long userId = Long.valueOf(request.get("userId").toString());
             Integer pointsAmount = Integer.valueOf(request.get("pointsAmount").toString());
+            String paypalEmail = request.getOrDefault("paypalEmail", "").toString();
 
             if (pointsAmount <= 0) {
                 Map<String, String> error = new HashMap<>();
@@ -37,14 +38,17 @@ public class WithdrawalController {
                 return ResponseEntity.badRequest().body(error);
             }
 
-            WithdrawalRequest withdrawal = withdrawalService.submitWithdrawal(userId, pointsAmount);
+            System.out.println("[Withdrawal] Submitting withdrawal for userId: " + userId + 
+                              ", points: " + pointsAmount + ", PayPal: " + paypalEmail);
+
+            WithdrawalRequest withdrawal = withdrawalService.submitWithdrawal(userId, pointsAmount, paypalEmail);
             
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
             response.put("withdrawal", withdrawal);
             
             if (withdrawal.getRequiresApproval()) {
-                response.put("message", "Withdrawal request submitted. Admin approval required for amounts >= $1000");
+                response.put("message", "Withdrawal request submitted. Admin approval required for amounts >= ₹10,000");
             } else {
                 response.put("message", "Withdrawal request submitted. Ready to process");
             }

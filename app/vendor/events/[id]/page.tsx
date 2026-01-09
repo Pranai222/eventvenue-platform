@@ -550,7 +550,7 @@ export default function EditEventPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="pricePerTicket">Price Per Ticket ($)</Label>
+                    <Label htmlFor="pricePerTicket">Price Per Ticket (₹)</Label>
                     <Input
                       id="pricePerTicket"
                       type="number"

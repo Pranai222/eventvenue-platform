@@ -95,6 +95,46 @@ public class AdminController {
         }
     }
 
+    @GetMapping("/users/{id}")
+    public ResponseEntity<ApiResponse> getUserById(@PathVariable Long id) {
+        try {
+            Optional<User> userOpt = userRepository.findById(id);
+            if (userOpt.isEmpty()) {
+                return ResponseEntity.badRequest().body(ApiResponse.builder()
+                        .success(false)
+                        .message("User not found")
+                        .build());
+            }
+            return ResponseEntity.ok(ApiResponse.builder()
+                    .success(true)
+                    .message("User retrieved successfully")
+                    .data(userOpt.get())
+                    .build());
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(ApiResponse.builder()
+                    .success(false)
+                    .message("Failed to retrieve user: " + e.getMessage())
+                    .build());
+        }
+    }
+
+    @GetMapping("/users/{id}/bookings")
+    public ResponseEntity<ApiResponse> getUserBookings(@PathVariable Long id) {
+        try {
+            List<Booking> bookings = bookingRepository.findByUserId(id);
+            return ResponseEntity.ok(ApiResponse.builder()
+                    .success(true)
+                    .message("User bookings retrieved successfully")
+                    .data(bookings)
+                    .build());
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(ApiResponse.builder()
+                    .success(false)
+                    .message("Failed to retrieve user bookings: " + e.getMessage())
+                    .build());
+        }
+    }
+
     @PutMapping("/users/{id}")
     public ResponseEntity<ApiResponse> updateUser(@PathVariable Long id, @RequestBody User userUpdate) {
         try {
@@ -196,6 +236,29 @@ public class AdminController {
             return ResponseEntity.badRequest().body(ApiResponse.builder()
                     .success(false)
                     .message("Failed to retrieve pending vendors: " + e.getMessage())
+                    .build());
+        }
+    }
+
+    @GetMapping("/vendors/by-email")
+    public ResponseEntity<ApiResponse> getVendorByEmail(@RequestParam String email) {
+        try {
+            Optional<Vendor> vendor = vendorRepository.findByEmail(email);
+            if (vendor.isEmpty()) {
+                return ResponseEntity.badRequest().body(ApiResponse.builder()
+                        .success(false)
+                        .message("Vendor not found with email: " + email)
+                        .build());
+            }
+            return ResponseEntity.ok(ApiResponse.builder()
+                    .success(true)
+                    .message("Vendor retrieved successfully")
+                    .data(vendor.get())
+                    .build());
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(ApiResponse.builder()
+                    .success(false)
+                    .message("Failed to retrieve vendor: " + e.getMessage())
                     .build());
         }
     }
@@ -324,6 +387,71 @@ public class AdminController {
             return ResponseEntity.badRequest().body(ApiResponse.builder()
                     .success(false)
                     .message("Failed to update conversion rate: " + e.getMessage())
+                    .build());
+        }
+    }
+
+    @GetMapping("/settings/platform-fees")
+    public ResponseEntity<ApiResponse> getPlatformFees() {
+        try {
+            AdminService.PlatformFeesResponse fees = adminService.getPlatformFees();
+            return ResponseEntity.ok(ApiResponse.builder()
+                    .success(true)
+                    .message("Platform fees retrieved successfully")
+                    .data(fees)
+                    .build());
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(ApiResponse.builder()
+                    .success(false)
+                    .message("Failed to retrieve platform fees: " + e.getMessage())
+                    .build());
+        }
+    }
+
+    @PutMapping("/settings/platform-fees")
+    public ResponseEntity<ApiResponse> updatePlatformFees(@RequestBody Map<String, Integer> request) {
+        try {
+            int userFee = request.getOrDefault("userPlatformFeePoints", 2);
+            int venueCreation = request.getOrDefault("venueCreationPoints", 10);
+            int eventQuantity = request.getOrDefault("eventCreationPointsQuantity", 10);
+            int eventSeat = request.getOrDefault("eventCreationPointsSeat", 20);
+            
+            AdminService.PlatformFeesResponse fees = adminService.updatePlatformFees(
+                userFee, venueCreation, eventQuantity, eventSeat);
+            return ResponseEntity.ok(ApiResponse.builder()
+                    .success(true)
+                    .message("Platform fees updated successfully")
+                    .data(fees)
+                    .build());
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(ApiResponse.builder()
+                    .success(false)
+                    .message("Failed to update platform fees: " + e.getMessage())
+                    .build());
+        }
+    }
+
+    @Autowired
+    private com.eventvenue.repository.ReviewRepository reviewRepository;
+
+    @DeleteMapping("/reviews/{reviewId}")
+    public ResponseEntity<ApiResponse> deleteReview(@PathVariable Long reviewId) {
+        try {
+            if (!reviewRepository.existsById(reviewId)) {
+                return ResponseEntity.badRequest().body(ApiResponse.builder()
+                        .success(false)
+                        .message("Review not found with ID: " + reviewId)
+                        .build());
+            }
+            reviewRepository.deleteById(reviewId);
+            return ResponseEntity.ok(ApiResponse.builder()
+                    .success(true)
+                    .message("Review deleted successfully")
+                    .build());
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(ApiResponse.builder()
+                    .success(false)
+                    .message("Failed to delete review: " + e.getMessage())
                     .build());
         }
     }

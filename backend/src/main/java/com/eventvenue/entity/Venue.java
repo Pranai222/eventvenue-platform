@@ -55,6 +55,17 @@ public class Venue {
     @Column(columnDefinition = "INT DEFAULT 0")
     private Integer totalBookings;
 
+    // Vendor contact phone (mandatory for user contact info)
+    @Column(nullable = false)
+    private String vendorPhone;
+
+    // Edit limit tracking - only 2 edits allowed for address/location
+    @Column(columnDefinition = "INT DEFAULT 0")
+    private Integer editCount;
+
+    @Column(columnDefinition = "BOOLEAN DEFAULT FALSE")
+    private Boolean isEditLocked;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -68,6 +79,8 @@ public class Venue {
         isAvailable = true;
         rating = 0.0;
         totalBookings = 0;
+        editCount = 0;
+        isEditLocked = false;
     }
 
     @PreUpdate

@@ -14,4 +14,5 @@ public class PurchasePointsRequest {
     private Double amount;
     private String paymentMethod;
     private String transactionId;
+    private String cardLast4;
 }

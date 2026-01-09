@@ -30,10 +30,16 @@ next-env.d.ts
 # EXCLUDE FROM GITHUB
 # =====================
 
-# Learning/documentation folder
+# Learning/documentation folders
 /learning/
+/ai-plan/
+/docs/
 
-# Unnecessary .md documentation files
+# ALL documentation .md files (except README)
+*.md
+!README.md
+
+# Specifically exclude these patterns
 *_COMPLETE.md
 *_GUIDE.md
 *_SUMMARY.md
@@ -43,6 +49,7 @@ next-env.d.ts
 *_TESTING*.md
 *_SETUP*.md
 *_FIXES*.md
+*WALKTHROUGH*.md
 *POSTMAN*.json
 *ADMIN*.json
 IMPLEMENTATION*.md
@@ -56,11 +63,19 @@ PROJECT*.md
 GOOGLE*.md
 STRIPE*.md
 API_FIXES*.md
+CLOUD*.md
+SUPABASE*.md
+CRITICAL*.md
+COMPREHENSIVE*.md
+SYSTEM*.md
+FINAL*.md
+ARCHITECTURE*.md
+DIAGNOSTIC*.md
+ROADMAP*.md
 
-# Keep only essential docs
-!README.md
-!CLOUD_DEPLOYMENT_GUIDE.md
-!SUPABASE_SETUP_GUIDE.md
+# Backend documentation
+/backend/*.md
+!backend/README.md
 
 # Backend build files
 /backend/target/
@@ -71,3 +86,6 @@ API_FIXES*.md
 .idea/
 *.iml
 .vscode/
+
+# Gemini artifacts (local only)
+.gemini/

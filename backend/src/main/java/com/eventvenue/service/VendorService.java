@@ -4,8 +4,12 @@ import com.eventvenue.dto.AuthResponse;
 import com.eventvenue.dto.SignupRequest;
 import com.eventvenue.entity.Vendor;
 import com.eventvenue.entity.User;
+import com.eventvenue.entity.WithdrawalRequest;
 import com.eventvenue.repository.VendorRepository;
 import com.eventvenue.repository.UserRepository;
+import com.eventvenue.repository.WithdrawalRequestRepository;
+import com.eventvenue.repository.CreditTransactionRepository;
+import com.eventvenue.entity.CreditTransaction;
 import com.eventvenue.security.JwtTokenProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -24,6 +28,12 @@ public class VendorService {
     private UserRepository userRepository;
 
     @Autowired
+    private WithdrawalRequestRepository withdrawalRequestRepository;
+
+    @Autowired
+    private CreditTransactionRepository creditTransactionRepository;
+
+    @Autowired
     private PasswordEncoder passwordEncoder;
 
     @Autowired
@@ -31,11 +41,27 @@ public class VendorService {
     
     @Autowired
     private AuditLogService auditLogService;
+    
+    @Autowired
+    private EmailService emailService;
 
     public AuthResponse registerVendorResponse(SignupRequest request) {
-        // Check if email already registered as VENDOR (allow same email for different roles)
-        if (vendorRepository.existsByEmail(request.getEmail())) {
-            throw new RuntimeException("Email already registered as a vendor");
+        // Check if email already registered as VENDOR
+        Optional<Vendor> existingVendor = vendorRepository.findByEmail(request.getEmail());
+        if (existingVendor.isPresent()) {
+            Vendor vendor = existingVendor.get();
+            // If unverified, delete and allow re-registration
+            if (!vendor.getIsVerified()) {
+                vendorRepository.delete(vendor);
+                // Also delete the corresponding user entry
+                Optional<User> existingUser = userRepository.findByEmailAndRole(request.getEmail(), "VENDOR");
+                if (existingUser.isPresent()) {
+                    userRepository.delete(existingUser.get());
+                }
+                System.out.println("[pranai] Deleted unverified vendor for re-registration: " + request.getEmail());
+            } else {
+                throw new RuntimeException("Email already registered as a verified vendor");
+            }
         }
 
         User user = User.builder()
@@ -46,7 +72,7 @@ public class VendorService {
                 .lastName(request.getLastName())
                 .phone(request.getPhone())
                 .role("VENDOR")
-                .points(0L)
+                .points(200L)  // Vendors get 200 welcome points
                 .isVerified(false)
                 .build();
 
@@ -146,9 +172,23 @@ public class VendorService {
             vendor.setIsVerified(true);
             Vendor saved = vendorRepository.save(vendor);
             
+            // IMPORTANT: Also update the User entity's isVerified field
+            // This is needed because User Management page loads from User table
+            Optional<User> userOptional = userRepository.findByEmailAndRole(vendor.getEmail(), "VENDOR");
+            if (userOptional.isPresent()) {
+                User user = userOptional.get();
+                user.setIsVerified(true);
+                userRepository.save(user);
+                System.out.println("[EventVenue] Updated User.isVerified to true for vendor: " + vendor.getEmail());
+            }
+            
             // Audit log vendor approval
             auditLogService.log("VENDOR_APPROVED", "VENDOR", vendor.getId(), 
                 "Vendor approved: " + vendor.getBusinessName(), "ADMIN", "ADMIN", null);
+            
+            // Send approval email with login link
+            emailService.sendVendorApprovalEmail(vendor.getEmail(), vendor.getBusinessName());
+            System.out.println("[EventVenue] Approval email sent to vendor: " + vendor.getEmail());
             
             return saved;
         }
@@ -165,6 +205,10 @@ public class VendorService {
             // Audit log vendor rejection
             auditLogService.log("VENDOR_REJECTED", "VENDOR", vendor.getId(), 
                 "Vendor rejected: " + vendor.getBusinessName() + ". Reason: " + reason, "ADMIN", "ADMIN", null);
+            
+            // Send rejection email with reason
+            emailService.sendVendorRejectionEmail(vendor.getEmail(), vendor.getBusinessName(), reason);
+            System.out.println("[EventVenue] Rejection email sent to vendor: " + vendor.getEmail());
             
             return saved;
         }
@@ -202,4 +246,102 @@ public class VendorService {
     public Vendor updateVendor(Vendor vendor) {
         return vendorRepository.save(vendor);
     }
+
+    /**
+     * Purchase points for a vendor
+     */
+    public Vendor purchasePoints(Long vendorId, Long points, String paymentMethod, String transactionId) {
+        Optional<Vendor> vendorOptional = vendorRepository.findById(vendorId);
+        if (vendorOptional.isPresent()) {
+            Vendor vendor = vendorOptional.get();
+            Long currentPoints = vendor.getPoints() != null ? vendor.getPoints() : 0L;
+            vendor.setPoints(currentPoints + points);
+            Vendor saved = vendorRepository.save(vendor);
+            
+            // Create a credit transaction record for the purchase
+            // Note: credit_transactions.user_id FK references users table, so we need to find the user by vendor email
+            Optional<User> userOptional = userRepository.findByEmailAndRole(vendor.getEmail(), "VENDOR");
+            if (userOptional.isPresent()) {
+                CreditTransaction transaction = new CreditTransaction();
+                transaction.setUserId(userOptional.get().getId()); // Use user ID, not vendor ID
+                transaction.setTransactionType("VENDOR_PURCHASE");
+                transaction.setPointsAmount(points.intValue());
+                transaction.setStripePaymentIntentId(transactionId); // Using this field for PayPal transaction ID
+                transaction.setStatus("COMPLETED");
+                transaction.setReason("Vendor points purchase via " + paymentMethod);
+                creditTransactionRepository.save(transaction);
+            }
+            
+            System.out.println("[VendorService] Points purchased - Vendor: " + vendor.getBusinessName() + 
+                              ", Points: " + points + ", Method: " + paymentMethod + ", Tx: " + transactionId);
+            
+            return saved;
+        }
+        throw new RuntimeException("Vendor not found");
+    }
+
+    /**
+ * Get vendor transaction history
+ */
+public java.util.List<java.util.Map<String, Object>> getVendorTransactions(Long vendorId) {
+    java.util.List<java.util.Map<String, Object>> transactions = new java.util.ArrayList<>();
+    
+    // Fetch real withdrawal requests from database
+    List<WithdrawalRequest> withdrawals = withdrawalRequestRepository.findByUserIdOrderByCreatedAtDesc(vendorId);
+    
+    for (WithdrawalRequest w : withdrawals) {
+        java.util.Map<String, Object> tx = new java.util.HashMap<>();
+        tx.put("id", w.getId());
+        tx.put("type", "WITHDRAWAL");
+        tx.put("points", -w.getPointsAmount()); // Negative for withdrawal
+        tx.put("amount", w.getAmountUsd());
+        tx.put("description", "Withdrawal to PayPal: " + (w.getPaypalEmail() != null ? w.getPaypalEmail() : "N/A"));
+        tx.put("status", w.getStatus());
+        tx.put("createdAt", w.getCreatedAt() != null ? w.getCreatedAt().toString() : "");
+        transactions.add(tx);
+    }
+    
+    // Also add vendor activity (welcome bonus, purchases)
+    Optional<Vendor> vendorOptional = vendorRepository.findById(vendorId);
+    if (vendorOptional.isPresent()) {
+        Vendor vendor = vendorOptional.get();
+        
+        // Welcome bonus transaction
+        java.util.Map<String, Object> welcomeTx = new java.util.HashMap<>();
+        welcomeTx.put("id", "welcome");
+        welcomeTx.put("type", "CREDIT");
+        welcomeTx.put("points", 200);
+        welcomeTx.put("description", "Welcome bonus - New vendor registration");
+        welcomeTx.put("status", "COMPLETED");
+        welcomeTx.put("createdAt", vendor.getCreatedAt() != null ? vendor.getCreatedAt().toString() : java.time.LocalDateTime.now().minusDays(30).toString());
+        transactions.add(welcomeTx);
+        
+        // Fetch PURCHASE transactions from CreditTransaction table
+        // Note: credit_transactions uses user_id FK, so find user by vendor email
+        Optional<User> userOptional = userRepository.findByEmailAndRole(vendor.getEmail(), "VENDOR");
+        if (userOptional.isPresent()) {
+            Long userId = userOptional.get().getId();
+            List<CreditTransaction> purchases = creditTransactionRepository.findByUserIdAndTransactionType(userId, "VENDOR_PURCHASE");
+            for (CreditTransaction purchase : purchases) {
+                java.util.Map<String, Object> tx = new java.util.HashMap<>();
+                tx.put("id", purchase.getId());
+                tx.put("type", "PURCHASE");
+                tx.put("points", purchase.getPointsAmount());
+                tx.put("amount", purchase.getAmountUsd());
+                tx.put("description", purchase.getReason() != null ? purchase.getReason() : "Points purchase via PayPal");
+                tx.put("status", purchase.getStatus());
+                tx.put("createdAt", purchase.getCreatedAt() != null ? purchase.getCreatedAt().toString() : "");
+                transactions.add(tx);
+            }
+        }
+    }  
+    // Sort by createdAt descending
+    transactions.sort((a, b) -> {
+        String dateA = (String) a.getOrDefault("createdAt", "");
+        String dateB = (String) b.getOrDefault("createdAt", "");
+        return dateB.compareTo(dateA);
+    });
+    
+    return transactions;
+}
 }

@@ -1,7 +1,8 @@
-"use client"
+﻿"use client"
 
 import { useState, useEffect } from "react"
 import { useAuth } from "@/lib/contexts/auth-context"
+import { useConversionRate } from "@/lib/contexts/conversion-rate-context"
 import { authApi } from "@/lib/api/auth"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -34,6 +35,7 @@ interface Transaction {
 
 export default function CreditsPage() {
     const { user } = useAuth()
+    const { conversionRate, isLoading: rateLoading } = useConversionRate()
     const [profile, setProfile] = useState<UserProfile | null>(null)
     const [transactions, setTransactions] = useState<Transaction[]>([])
     const [isLoading, setIsLoading] = useState(true)
@@ -64,7 +66,7 @@ export default function CreditsPage() {
     }
 
     const points = profile?.points || 0
-    const pointsValue = (points * 0.01).toFixed(2) // 100 points = $1
+    const pointsValue = (points / conversionRate).toFixed(2) // Uses dynamic rate
 
     return (
         <div className="container mx-auto px-4 py-8 max-w-7xl">
@@ -106,7 +108,7 @@ export default function CreditsPage() {
                     </CardHeader>
                     <CardContent>
                         <div className="text-4xl font-bold text-green-600 mb-1">
-                            100
+                            {conversionRate}
                         </div>
                         <p className="text-sm text-muted-foreground">
                             Points per ₹1 INR
@@ -159,7 +161,7 @@ export default function CreditsPage() {
                                 <div className="bg-muted/50 p-4 rounded-lg space-y-2">
                                     <div className="flex justify-between text-sm">
                                         <span className="text-muted-foreground">Payment Method</span>
-                                        <span className="font-medium">Credit/Debit Card</span>
+                                        <span className="font-medium">PayPal</span>
                                     </div>
                                     <div className="flex justify-between text-sm">
                                         <span className="text-muted-foreground">Processing</span>
@@ -167,7 +169,7 @@ export default function CreditsPage() {
                                     </div>
                                     <div className="flex justify-between text-sm">
                                         <span className="text-muted-foreground">Powered by</span>
-                                        <span className="font-medium">Stripe</span>
+                                        <span className="font-medium">PayPal</span>
                                     </div>
                                 </div>
                                 <Button
@@ -240,7 +242,7 @@ export default function CreditsPage() {
                             <div>
                                 <h4 className="font-semibold mb-1 text-blue-900 dark:text-blue-100">Purchase</h4>
                                 <p className="text-sm text-blue-700 dark:text-blue-300">
-                                    Buy points instantly using your credit card via secure Stripe payment
+                                    Buy points instantly using PayPal secure payment
                                 </p>
                             </div>
                             <div>

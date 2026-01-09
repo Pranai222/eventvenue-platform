@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
@@ -12,9 +12,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Building2, Ticket, Calendar, DollarSign, Plus, AlertCircle, CheckCircle } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import type { VenueData } from "@/lib/api/venues"
-import type { Event } from "@/lib/types/booking"
-import type { BookingData } from "@/lib/api/bookings"
+import type { Venue, Event, Booking } from "@/lib/types/booking"
 
 interface VendorProfile {
   id?: number
@@ -27,14 +25,34 @@ interface VendorProfile {
 export default function VendorDashboardPage() {
   const router = useRouter()
   const [profile, setProfile] = useState<VendorProfile | null>(null)
-  const [venues, setVenues] = useState<VenueData[]>([])
+  const [venues, setVenues] = useState<Venue[]>([])
   const [events, setEvents] = useState<Event[]>([])
-  const [bookings, setBookings] = useState<BookingData[]>([])
+  const [bookings, setBookings] = useState<Booking[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     async function loadData() {
+      // Check for auth token first
+      const token = localStorage.getItem("auth_token")
+      const userStr = localStorage.getItem("auth_user")
+
+      if (!token || !userStr) {
+        router.push("/login?role=vendor")
+        return
+      }
+
+      try {
+        const user = JSON.parse(userStr)
+        if (user.role !== "VENDOR") {
+          router.push("/login?role=vendor")
+          return
+        }
+      } catch {
+        router.push("/login?role=vendor")
+        return
+      }
+
       try {
         const profileResponse = await authApi.getVendorProfile()
         const profileData = profileResponse as VendorProfile
@@ -44,7 +62,7 @@ export default function VendorDashboardPage() {
           const venuesResponse = await venuesApi.getVendorVenues()
           const venuesData = Array.isArray(venuesResponse) ? venuesResponse : []
           // Sort by ID descending to show recently added venues on top
-          setVenues(venuesData.sort((a, b) => b.id - a.id))
+          setVenues([...venuesData].sort((a, b) => b.id - a.id))
         } catch (err: any) {
           setVenues([])
         }
@@ -53,7 +71,7 @@ export default function VendorDashboardPage() {
           const eventsResponse = await eventsApi.getVendorEvents()
           const eventsData = Array.isArray(eventsResponse) ? eventsResponse : []
           // Sort by ID descending to show recently added events on top
-          setEvents(eventsData.sort((a, b) => b.id - a.id))
+          setEvents([...eventsData].sort((a, b) => b.id - a.id))
         } catch (err: any) {
           setEvents([])
         }
@@ -61,8 +79,12 @@ export default function VendorDashboardPage() {
         try {
           const bookingsResponse = await bookingsApi.getVendorBookings()
           const bookingsData = Array.isArray(bookingsResponse) ? bookingsResponse : []
-          // Sort by createdAt descending to show recent activity on top
-          setBookings(bookingsData.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()))
+          // Sort by createdAt descending to show recent activity on top (handle undefined createdAt)
+          setBookings(bookingsData.sort((a, b) => {
+            const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0
+            const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0
+            return dateB - dateA
+          }))
         } catch (err: any) {
           setBookings([])
         }
@@ -166,7 +188,7 @@ export default function VendorDashboardPage() {
             <DollarSign className="h-4 w-4 text-accent" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${totalRevenue.toFixed(2)}</div>
+            <div className="text-2xl font-bold">₹{totalRevenue.toFixed(2)}</div>
             <p className="text-xs text-muted-foreground">All time earnings</p>
           </CardContent>
         </Card>
@@ -251,7 +273,7 @@ export default function VendorDashboardPage() {
                     <div>
                       <p className="font-medium text-sm">Booking #{booking.id}</p>
                       <p className="text-xs text-muted-foreground">
-                        {new Date(booking.createdAt).toLocaleDateString()}
+                        {booking.createdAt ? new Date(booking.createdAt).toLocaleDateString() : 'N/A'}
                       </p>
                     </div>
                     <Badge
@@ -313,7 +335,7 @@ export default function VendorDashboardPage() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-sm truncate">{venue.name}</p>
-                        <p className="text-xs text-muted-foreground">${venue.pricePerDay}/day</p>
+                        <p className="text-xs text-muted-foreground">₹{venue.pricePerDay}/day</p>
                       </div>
                       <Link href={`/vendor/venues/${venue.id}`}>
                         <Button size="sm" variant="ghost">

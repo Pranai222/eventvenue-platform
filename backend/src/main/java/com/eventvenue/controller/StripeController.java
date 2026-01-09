@@ -10,7 +10,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/stripe")
-@CrossOrigin(origins = "*")
+@CrossOrigin(origins = {"http://localhost:3000", "http://localhost:8000"})
 public class StripeController {
 
     private final StripePaymentService stripePaymentService;

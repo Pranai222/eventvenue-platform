@@ -22,7 +22,7 @@ import java.util.Map;
 @Service
 public class StripePaymentService {
 
-    @Value("${stripe.api.secret-key}")
+    @Value("${stripe.api.secret-key:}")
     private String stripeSecretKey;
 
     @Value("${points.to.dollar.ratio:0.01}")

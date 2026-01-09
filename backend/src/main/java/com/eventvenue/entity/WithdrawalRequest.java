@@ -46,6 +46,9 @@ public class WithdrawalRequest {
     @Column(name = "card_last4", length = 4)
     private String cardLast4;
 
+    @Column(name = "paypal_email")
+    private String paypalEmail;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -71,8 +74,8 @@ public class WithdrawalRequest {
 
     // Business logic methods
     public boolean requiresAdminApproval() {
-        // If amount is >= $1000, requires admin approval
-        return amountUsd != null && amountUsd.compareTo(new BigDecimal("1000.00")) >= 0;
+        // If points amount is > 10,000, requires admin approval
+        return pointsAmount != null && pointsAmount > 10000;
     }
 
     public boolean isPending() {

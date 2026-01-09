@@ -1,4 +1,4 @@
-export default function TermsPage() {
+﻿export default function TermsPage() {
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-12 max-w-4xl">
@@ -80,7 +80,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-2xl font-semibold mb-4">10. Contact Us</h2>
             <p className="text-muted-foreground mb-4">
-              For questions about these Terms of Service, please contact our support team at support@eventvenue.com or
+              For questions about these Terms of Service, please contact our support team at pranaib20@gmail.com or
               visit our Help Center.
             </p>
           </section>

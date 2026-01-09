@@ -1,15 +1,15 @@
-"use client"
+﻿"use client"
 
 import type React from "react"
 
 import { useEffect, useState } from "react"
-import { adminApi } from "@/lib/api/admin"
+import { adminApi, type PlatformFees } from "@/lib/api/admin"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { CheckCircle2, AlertCircle, Coins } from "lucide-react"
+import { CheckCircle2, AlertCircle, Coins, Settings } from "lucide-react"
 
 export default function AdminSettingsPage() {
   const [conversionRate, setConversionRate] = useState(1)
@@ -18,15 +18,33 @@ export default function AdminSettingsPage() {
   const [isSaving, setIsSaving] = useState(false)
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
 
+  // Platform fees state
+  const [platformFees, setPlatformFees] = useState<PlatformFees>({
+    userPlatformFeePoints: 2,
+    venueCreationPoints: 10,
+    eventCreationPointsQuantity: 10,
+    eventCreationPointsSeat: 20,
+  })
+  const [isSavingFees, setIsSavingFees] = useState(false)
+  const [feesMessage, setFeesMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
+
   useEffect(() => {
-    adminApi
-      .getConversionRate()
-      .then((data) => {
-        setConversionRate(data.pointsPerDollar)
-        setNewRate(data.pointsPerDollar)
-      })
-      .catch(console.error)
-      .finally(() => setIsLoading(false))
+    const loadSettings = async () => {
+      try {
+        const [rateData, feesData] = await Promise.all([
+          adminApi.getConversionRate(),
+          adminApi.getPlatformFees()
+        ])
+        setConversionRate(rateData.pointsPerDollar)
+        setNewRate(rateData.pointsPerDollar)
+        setPlatformFees(feesData)
+      } catch (error) {
+        console.error("Failed to load settings:", error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    loadSettings()
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -42,6 +60,21 @@ export default function AdminSettingsPage() {
       setMessage({ type: "error", text: error.message || "Failed to update conversion rate" })
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  const handleSaveFees = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setFeesMessage(null)
+    setIsSavingFees(true)
+
+    try {
+      await adminApi.updatePlatformFees(platformFees)
+      setFeesMessage({ type: "success", text: "Platform fees updated successfully!" })
+    } catch (error: any) {
+      setFeesMessage({ type: "error", text: error.message || "Failed to update platform fees" })
+    } finally {
+      setIsSavingFees(false)
     }
   }
 
@@ -71,7 +104,7 @@ export default function AdminSettingsPage() {
               <Coins className="h-5 w-5 text-accent" />
               <CardTitle>Points Conversion Rate</CardTitle>
             </div>
-            <CardDescription>Set how many points equal one dollar</CardDescription>
+            <CardDescription>Set how many points equal one rupee</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -87,7 +120,7 @@ export default function AdminSettingsPage() {
               )}
 
               <div className="space-y-2">
-                <Label htmlFor="rate">Points per $1</Label>
+                <Label htmlFor="rate">Points per ₹1</Label>
                 <Input
                   id="rate"
                   type="number"
@@ -102,17 +135,8 @@ export default function AdminSettingsPage() {
                   required
                 />
                 <p className="text-sm text-muted-foreground">
-                  Current rate: {conversionRate} points = $1 | With new rate: {newRate} points = $1
+                  Current: {conversionRate} pts = ₹1
                 </p>
-              </div>
-
-              <div className="p-4 bg-muted rounded-lg space-y-2">
-                <p className="text-sm font-medium">Examples with new rate:</p>
-                <ul className="text-sm text-muted-foreground space-y-1">
-                  <li>• {newRate * 10} points = $10</li>
-                  <li>• {newRate * 50} points = $50</li>
-                  <li>• {newRate * 100} points = $100</li>
-                </ul>
               </div>
 
               <Button type="submit" disabled={isSaving || newRate === conversionRate}>
@@ -122,22 +146,82 @@ export default function AdminSettingsPage() {
           </CardContent>
         </Card>
 
-        {/* Other Settings Placeholders */}
+        {/* Platform Fees */}
         <Card>
           <CardHeader>
-            <CardTitle>Platform Configuration</CardTitle>
-            <CardDescription>Additional system settings</CardDescription>
+            <div className="flex items-center gap-2">
+              <Settings className="h-5 w-5 text-accent" />
+              <CardTitle>Platform Fees</CardTitle>
+            </div>
+            <CardDescription>Configure point charges for users and vendors</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-sm text-muted-foreground">
-              Additional configuration options can be added here such as:
-              <ul className="list-disc list-inside mt-2 space-y-1">
-                <li>Commission rates for vendors</li>
-                <li>Booking cancellation policies</li>
-                <li>Email notification templates</li>
-                <li>Featured listing pricing</li>
-              </ul>
-            </div>
+            <form onSubmit={handleSaveFees} className="space-y-4">
+              {feesMessage && (
+                <Alert variant={feesMessage.type === "error" ? "destructive" : "default"}>
+                  {feesMessage.type === "success" ? (
+                    <CheckCircle2 className="h-4 w-4" />
+                  ) : (
+                    <AlertCircle className="h-4 w-4" />
+                  )}
+                  <AlertDescription>{feesMessage.text}</AlertDescription>
+                </Alert>
+              )}
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="userFee">User Platform Fee (pts)</Label>
+                  <Input
+                    id="userFee"
+                    type="number"
+                    min={0}
+                    value={platformFees.userPlatformFeePoints}
+                    onChange={(e) => setPlatformFees({ ...platformFees, userPlatformFeePoints: parseInt(e.target.value) || 0 })}
+                  />
+                  <p className="text-xs text-muted-foreground">Added to user bookings</p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="venueCreation">Venue Creation (pts)</Label>
+                  <Input
+                    id="venueCreation"
+                    type="number"
+                    min={0}
+                    value={platformFees.venueCreationPoints}
+                    onChange={(e) => setPlatformFees({ ...platformFees, venueCreationPoints: parseInt(e.target.value) || 0 })}
+                  />
+                  <p className="text-xs text-muted-foreground">Deducted from vendor</p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="eventQty">Event (Quantity) (pts)</Label>
+                  <Input
+                    id="eventQty"
+                    type="number"
+                    min={0}
+                    value={platformFees.eventCreationPointsQuantity}
+                    onChange={(e) => setPlatformFees({ ...platformFees, eventCreationPointsQuantity: parseInt(e.target.value) || 0 })}
+                  />
+                  <p className="text-xs text-muted-foreground">Quantity-based event</p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="eventSeat">Event (Seat-based) (pts)</Label>
+                  <Input
+                    id="eventSeat"
+                    type="number"
+                    min={0}
+                    value={platformFees.eventCreationPointsSeat}
+                    onChange={(e) => setPlatformFees({ ...platformFees, eventCreationPointsSeat: parseInt(e.target.value) || 0 })}
+                  />
+                  <p className="text-xs text-muted-foreground">Seat-selection event</p>
+                </div>
+              </div>
+
+              <Button type="submit" disabled={isSavingFees}>
+                {isSavingFees ? "Saving..." : "Save Platform Fees"}
+              </Button>
+            </form>
           </CardContent>
         </Card>
       </div>

@@ -78,6 +78,13 @@ public class Event {
     @Column(name = "original_location")
     private String originalLocation;
 
+    // Rating fields (calculated from reviews)
+    @Column(columnDefinition = "DECIMAL(3, 2) DEFAULT 0.00")
+    private Double rating;
+
+    @Column(columnDefinition = "INT DEFAULT 0")
+    private Integer reviewCount;
+
     // Cancellation tracking
     @Column(columnDefinition = "BOOLEAN DEFAULT FALSE")
     private Boolean isCancelled = false;
@@ -87,6 +94,17 @@ public class Event {
 
     @Column(name = "cancelled_at")
     private LocalDateTime cancelledAt;
+
+    // Vendor contact phone (mandatory for user contact info)
+    @Column(nullable = false)
+    private String vendorPhone;
+
+    // Edit limit tracking - only 2 edits allowed for location/time changes
+    @Column(columnDefinition = "INT DEFAULT 0")
+    private Integer editCount;
+
+    @Column(columnDefinition = "BOOLEAN DEFAULT FALSE")
+    private Boolean isEditLocked;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -103,6 +121,10 @@ public class Event {
         rescheduleCount = 0;
         wasRescheduled = false;
         isCancelled = false;
+        rating = 0.0;
+        reviewCount = 0;
+        editCount = 0;
+        isEditLocked = false;
         // Store original values
         originalEventDate = eventDate;
         originalLocation = location;

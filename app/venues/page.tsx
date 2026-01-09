@@ -1,7 +1,8 @@
-"use client"
+﻿"use client"
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { venuesApi } from "@/lib/api/venues"
 import type { Venue } from "@/lib/types/booking"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -16,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Calendar, MapPin, Users, Star, Search, SlidersHorizontal, User, LogOut, DollarSign, X, Filter } from "lucide-react"
+import { Calendar, MapPin, Users, Star, Search, SlidersHorizontal, User, LogOut, DollarSign, X, Filter, ArrowLeft } from "lucide-react"
 import { useAuth } from "@/lib/contexts/auth-context"
 import {
   DropdownMenu,
@@ -68,6 +69,7 @@ export default function VenuesPage() {
     rating: "",
   })
   const { user, logout, isAuthenticated } = useAuth()
+  const router = useRouter()
 
   useEffect(() => {
     loadVenues()
@@ -78,8 +80,10 @@ export default function VenuesPage() {
     try {
       const venuesData = await venuesApi.getAll()
       const venuesList = Array.isArray(venuesData) ? venuesData : []
-      setAllVenues(venuesList)
-      setVenues(venuesList)
+      // Sort by ID descending to show newest venues first
+      const sortedVenues = venuesList.sort((a, b) => b.id - a.id)
+      setAllVenues(sortedVenues)
+      setVenues(sortedVenues)
     } catch (error) {
       console.error("Failed to load venues:", error)
       setVenues([])
@@ -217,6 +221,12 @@ export default function VenuesPage() {
       </header>
 
       <div className="container mx-auto px-4 py-8">
+        {/* Back Button */}
+        <Button variant="ghost" onClick={() => router.back()} className="mb-6 gap-2">
+          <ArrowLeft className="h-4 w-4" />
+          Back
+        </Button>
+
         {/* Hero Section */}
         <div className="mb-8 text-center">
           <h1 className="text-4xl md:text-5xl font-bold mb-3 bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
@@ -489,7 +499,7 @@ export default function VenuesPage() {
                   <CardContent>
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-2xl font-bold text-primary">${venue.pricePerHour}</p>
+                        <p className="text-2xl font-bold text-primary">₹{venue.pricePerHour}</p>
                         <p className="text-xs text-muted-foreground">per hour</p>
                       </div>
                       <Link href={`/venues/${venue.id}`}>

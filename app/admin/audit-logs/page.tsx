@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useEffect, useState } from "react"
 import { adminApi, type AuditLog } from "@/lib/api/admin"
@@ -6,7 +6,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ScrollText, Filter, Clock, User, Building2, Calendar, Ticket, Settings, RefreshCw } from "lucide-react"
+import { ScrollText, Filter, Clock, User, Building2, Calendar, Ticket, Settings, RefreshCw, ChevronDown, ChevronUp } from "lucide-react"
+
+const INITIAL_DISPLAY_COUNT = 10
 
 const entityTypes = [
     { value: "all", label: "All Types" },
@@ -17,6 +19,18 @@ const entityTypes = [
     { value: "BOOKING", label: "Booking" },
     { value: "REVIEW", label: "Review" },
     { value: "SETTINGS", label: "Settings" },
+]
+
+const actionTypes = [
+    { value: "all", label: "All Actions" },
+    { value: "CREATED", label: "Created" },
+    { value: "UPDATED", label: "Updated" },
+    { value: "DELETED", label: "Deleted" },
+    { value: "APPROVED", label: "Approved" },
+    { value: "REJECTED", label: "Rejected" },
+    { value: "REGISTERED", label: "Registered" },
+    { value: "CANCELLED", label: "Cancelled" },
+    { value: "BOOKED", label: "Booked" },
 ]
 
 const getEntityIcon = (entityType: string) => {
@@ -53,9 +67,12 @@ const getActionBadgeVariant = (action: string): "default" | "secondary" | "destr
 
 export default function AdminAuditLogsPage() {
     const [logs, setLogs] = useState<AuditLog[]>([])
+    const [filteredLogs, setFilteredLogs] = useState<AuditLog[]>([])
     const [isLoading, setIsLoading] = useState(true)
     const [filterEntityType, setFilterEntityType] = useState("all")
+    const [filterAction, setFilterAction] = useState("all")
     const [error, setError] = useState<string | null>(null)
+    const [showAll, setShowAll] = useState(false)
 
     const loadLogs = async () => {
         setIsLoading(true)
@@ -87,6 +104,15 @@ export default function AdminAuditLogsPage() {
     useEffect(() => {
         loadLogs()
     }, [filterEntityType])
+
+    // Apply action filter on loaded logs
+    useEffect(() => {
+        if (filterAction === "all") {
+            setFilteredLogs(logs)
+        } else {
+            setFilteredLogs(logs.filter(log => log.action.includes(filterAction)))
+        }
+    }, [logs, filterAction])
 
     const formatTimeAgo = (dateString: string) => {
         const date = new Date(dateString)
@@ -145,6 +171,21 @@ export default function AdminAuditLogsPage() {
                                 </SelectContent>
                             </Select>
                         </div>
+                        <div className="w-48">
+                            <label className="text-sm font-medium mb-1 block">Action Type</label>
+                            <Select value={filterAction} onValueChange={setFilterAction}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select action" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {actionTypes.map((type) => (
+                                        <SelectItem key={type.value} value={type.value}>
+                                            {type.label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
                     </div>
                 </CardContent>
             </Card>
@@ -154,7 +195,8 @@ export default function AdminAuditLogsPage() {
                 <CardHeader>
                     <CardTitle>Activity Log</CardTitle>
                     <CardDescription>
-                        {logs.length} {logs.length === 1 ? "entry" : "entries"} found
+                        {filteredLogs.length} {filteredLogs.length === 1 ? "entry" : "entries"} found
+                        {(filterEntityType !== "all" || filterAction !== "all") && " (filtered)"}
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -179,7 +221,7 @@ export default function AdminAuditLogsPage() {
                                 Try Again
                             </Button>
                         </div>
-                    ) : logs.length === 0 ? (
+                    ) : filteredLogs.length === 0 ? (
                         <div className="text-center py-12 text-muted-foreground">
                             <ScrollText className="h-12 w-12 mx-auto mb-4 opacity-50" />
                             <p className="text-lg font-medium">No audit logs found</p>
@@ -187,7 +229,7 @@ export default function AdminAuditLogsPage() {
                         </div>
                     ) : (
                         <div className="space-y-3">
-                            {logs.map((log) => (
+                            {(showAll ? filteredLogs : filteredLogs.slice(0, INITIAL_DISPLAY_COUNT)).map((log) => (
                                 <div
                                     key={log.id}
                                     className="flex items-start gap-4 p-4 bg-muted/50 rounded-lg hover:bg-muted/70 transition-colors"
@@ -224,6 +266,29 @@ export default function AdminAuditLogsPage() {
                                     </div>
                                 </div>
                             ))}
+
+                            {/* View All / Show Less Button */}
+                            {filteredLogs.length > INITIAL_DISPLAY_COUNT && (
+                                <div className="flex justify-center pt-4">
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => setShowAll(!showAll)}
+                                        className="gap-2"
+                                    >
+                                        {showAll ? (
+                                            <>
+                                                <ChevronUp className="h-4 w-4" />
+                                                Show Less
+                                            </>
+                                        ) : (
+                                            <>
+                                                <ChevronDown className="h-4 w-4" />
+                                                View All ({filteredLogs.length - INITIAL_DISPLAY_COUNT} more)
+                                            </>
+                                        )}
+                                    </Button>
+                                </div>
+                            )}
                         </div>
                     )}
                 </CardContent>

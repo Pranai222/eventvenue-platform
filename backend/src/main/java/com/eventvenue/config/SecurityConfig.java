@@ -54,16 +54,19 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/**", "/api/health/**").permitAll()
                 .requestMatchers("/api/admin/create-admin").permitAll()
                 .requestMatchers("/api/admin/settings/conversion-rate").permitAll() // Public read access
+                .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/admin/settings/platform-fees").permitAll() // Public read access
                 .requestMatchers("/uploads/**").permitAll() // Static image files
-                .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/stripe/calculate-points").permitAll() // Public points calculation
                 .requestMatchers("/api/upload/**").authenticated() // Upload requires auth
                 .requestMatchers("/api/venues/**").authenticated()
                 .requestMatchers("/api/bookings/**").authenticated()
-                .requestMatchers("/api/stripe/**").authenticated() // Stripe payments require auth
-                // Events: allow public GET (viewing), require auth for modifications
+                .requestMatchers("/api/points/**").authenticated() // Points operations require auth
+                .requestMatchers("/api/withdrawals/**").permitAll() // Open for testing - userId in body
+                .requestMatchers("/api/credit-requests/**").permitAll() // Open for testing - userId in body
+                // Events: vendor-specific endpoints require vendor authentication
+                .requestMatchers("/api/events/vendor/**").hasRole("VENDOR")
+                // Events: allow public GET for viewing events, require auth for modifications
                 .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/events/**").permitAll()
                 .requestMatchers("/api/events/**").authenticated()
-                .requestMatchers("/api/points/**").authenticated()
                 .requestMatchers("/api/user/**").hasRole("USER")
                 .requestMatchers("/api/vendor/**").hasRole("VENDOR")
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")

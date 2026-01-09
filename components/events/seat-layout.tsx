@@ -1,6 +1,6 @@
-"use client"
+﻿"use client"
 
-import { useState, useMemo, useEffect } from "react"
+import { useState, useMemo, useEffect, useRef } from "react"
 import type { SeatLayout, EventSeat, SeatCategory } from "@/lib/types/booking"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -8,15 +8,20 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Slider } from "@/components/ui/slider"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
-import { Coins } from "lucide-react"
+import { Coins, CreditCard } from "lucide-react"
+
+// PayPal Client ID
+const PAYPAL_CLIENT_ID = "AcHqC_6TsYO9h_Zeaq9D-ADt_lsf63e69ifdyLvvJv-BdKNjZ-4yPMvqGO3bg9nrywlMI_HPq_Qw8occ"
 
 interface SeatLayoutProps {
     layout: SeatLayout
-    onBookSeats: (seatIds: number[], pointsToUse: number) => Promise<void>
+    onBookSeats: (seatIds: number[], pointsToUse: number, paypalTransactionId?: string | null) => Promise<void>
     maxSeats?: number
     isLoading?: boolean
     userPoints?: number
     conversionRate?: number
+    platformFee?: number
+    eventName?: string
 }
 
 export function SeatLayoutComponent({
@@ -25,10 +30,39 @@ export function SeatLayoutComponent({
     maxSeats = 10,
     isLoading = false,
     userPoints = 0,
-    conversionRate = 100  // 100 points = $1 by default
+    conversionRate = 100,
+    platformFee = 2,
+    eventName = "Event"
 }: SeatLayoutProps) {
     const [selectedSeats, setSelectedSeats] = useState<number[]>([])
     const [pointsToUse, setPointsToUse] = useState(0)
+    const [showPaypalModal, setShowPaypalModal] = useState(false)
+    const [paypalLoaded, setPaypalLoaded] = useState(false)
+    const [paypalProcessing, setPaypalProcessing] = useState(false)
+    const [error, setError] = useState<string | null>(null)
+
+    // Ref for onBookSeats callback
+    const onBookSeatsRef = useRef(onBookSeats)
+    onBookSeatsRef.current = onBookSeats
+
+    // Load PayPal SDK when modal opens
+    useEffect(() => {
+        if (showPaypalModal && !paypalLoaded) {
+            const existingScript = document.getElementById('paypal-sdk')
+            if (existingScript) {
+                setPaypalLoaded(true)
+                return
+            }
+
+            const script = document.createElement('script')
+            script.id = 'paypal-sdk'
+            script.src = `https://www.paypal.com/sdk/js?client-id=${PAYPAL_CLIENT_ID}&currency=USD`
+            script.async = true
+            script.onload = () => setPaypalLoaded(true)
+            script.onerror = () => setError('Failed to load PayPal. Please try again.')
+            document.body.appendChild(script)
+        }
+    }, [showPaypalModal, paypalLoaded])
 
     // Group seats by row
     const seatsByRow = useMemo(() => {
@@ -83,6 +117,57 @@ export function SeatLayoutComponent({
         return Math.max(0, selectedSeatsInfo.total - pointsDiscount)
     }, [selectedSeatsInfo.total, pointsDiscount])
 
+    // Render PayPal buttons when SDK is loaded
+    useEffect(() => {
+        if (paypalLoaded && showPaypalModal && (window as any).paypal && finalPrice > 0) {
+            const paypalButtonContainer = document.getElementById('seat-paypal-button-container')
+            if (paypalButtonContainer) {
+                paypalButtonContainer.innerHTML = ''
+
+                    ; (window as any).paypal.Buttons({
+                        style: {
+                            layout: 'vertical',
+                            color: 'blue',
+                            shape: 'rect',
+                            label: 'pay'
+                        },
+                        createOrder: (_data: any, actions: any) => {
+                            return actions.order.create({
+                                purchase_units: [{
+                                    amount: {
+                                        value: finalPrice.toFixed(2),
+                                        currency_code: 'USD'
+                                    },
+                                    description: `${eventName} - ${selectedSeats.length} seat(s)`
+                                }]
+                            })
+                        },
+                        onApprove: async (_data: any, actions: any) => {
+                            setPaypalProcessing(true)
+                            setError(null)
+
+                            try {
+                                const order = await actions.order.capture()
+                                await onBookSeatsRef.current(selectedSeats, pointsToUse, order.id)
+                                setShowPaypalModal(false)
+                            } catch (err: any) {
+                                setError('Payment completed but booking failed. Please contact support.')
+                            } finally {
+                                setPaypalProcessing(false)
+                            }
+                        },
+                        onError: (err: any) => {
+                            console.error('PayPal error:', err)
+                            setError('PayPal payment failed. Please try again.')
+                        },
+                        onCancel: () => {
+                            setError('Payment cancelled')
+                        }
+                    }).render('#seat-paypal-button-container')
+            }
+        }
+    }, [paypalLoaded, showPaypalModal, finalPrice, eventName, selectedSeats, pointsToUse])
+
     // Reset points when seats change
     useEffect(() => {
         setPointsToUse(0)
@@ -104,7 +189,15 @@ export function SeatLayoutComponent({
 
     const handleBooking = async () => {
         if (selectedSeats.length === 0) return
-        await onBookSeats(selectedSeats, pointsToUse)
+
+        // If there's a remaining amount to pay, show PayPal modal
+        if (finalPrice > 0) {
+            setShowPaypalModal(true)
+            return
+        }
+
+        // If fully paid with points, book directly
+        await onBookSeats(selectedSeats, pointsToUse, null)
     }
 
     // Get aisle positions for a category
@@ -146,7 +239,7 @@ export function SeatLayoutComponent({
                         variant="outline"
                         style={{ borderColor: category.color, color: category.color }}
                     >
-                        {category.name} - ${category.price}
+                        {category.name} - ₹{category.price}
                     </Badge>
                 ))}
             </div>
@@ -193,7 +286,7 @@ export function SeatLayoutComponent({
                                                     style={{
                                                         borderColor: isAvailable || isSelected ? category?.color || '#22c55e' : undefined
                                                     }}
-                                                    title={`${rowLabel}${seat.seatNumber} - $${seat.price}`}
+                                                    title={`${rowLabel}${seat.seatNumber} - ₹${seat.price}`}
                                                 >
                                                     {seat.seatNumber}
                                                 </button>
@@ -232,7 +325,7 @@ export function SeatLayoutComponent({
                             </div>
                             <div className="text-right">
                                 <p className="text-lg font-semibold">
-                                    Subtotal: ${selectedSeatsInfo.total.toFixed(2)}
+                                    Subtotal: ₹{selectedSeatsInfo.total.toFixed(2)}
                                 </p>
                             </div>
                         </div>
@@ -263,13 +356,24 @@ export function SeatLayoutComponent({
                                         Using: {pointsToUse.toLocaleString()} pts
                                     </span>
                                     <span className="font-medium text-green-600">
-                                        -${pointsDiscount.toFixed(2)} discount
+                                        -₹{pointsDiscount.toFixed(2)} discount
                                     </span>
                                 </div>
 
                                 <p className="text-xs text-muted-foreground">
-                                    {conversionRate} points = $1.00
+                                    {conversionRate} points = ₹1.00
                                 </p>
+                            </div>
+                        )}
+
+                        {/* Platform Fee */}
+                        {selectedSeats.length > 0 && (
+                            <div className="flex justify-between text-sm text-amber-600">
+                                <span className="flex items-center gap-1">
+                                    <Coins className="h-3 w-3" />
+                                    Platform Fee
+                                </span>
+                                <span>{platformFee} pts</span>
                             </div>
                         )}
 
@@ -277,7 +381,7 @@ export function SeatLayoutComponent({
                         <div className="flex flex-wrap items-center justify-between gap-4 pt-2 border-t">
                             <div className="text-right">
                                 <p className="text-2xl font-bold text-primary">
-                                    ${finalPrice.toFixed(2)}
+                                    ₹{finalPrice.toFixed(2)}
                                 </p>
                                 <p className="text-xs text-muted-foreground">Final Total</p>
                             </div>
@@ -286,12 +390,90 @@ export function SeatLayoutComponent({
                                 disabled={selectedSeats.length === 0 || isLoading}
                                 size="lg"
                             >
-                                {isLoading ? "Booking..." : "Proceed to Book"}
+                                {isLoading ? "Booking..." : finalPrice > 0 ? `Pay ₹${finalPrice.toFixed(2)} with PayPal` : `Book with ${pointsToUse.toLocaleString()} Points`}
                             </Button>
                         </div>
+
+                        {/* Error Display */}
+                        {error && (
+                            <div className="rounded-lg bg-red-50 border border-red-200 p-4 text-red-700 text-sm">
+                                {error}
+                            </div>
+                        )}
                     </div>
                 </CardContent>
             </Card>
+
+            {/* PayPal Payment Modal */}
+            {showPaypalModal && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+                    <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden">
+                        {/* PayPal Header */}
+                        <div className="bg-gradient-to-r from-[#003087] to-[#009cde] p-6 text-white">
+                            <div className="flex items-center justify-center gap-3 mb-2">
+                                <span className="text-2xl font-bold">Pay</span>
+                                <span className="text-2xl font-bold text-[#00ade9]">Pal</span>
+                            </div>
+                            <p className="text-center text-sm opacity-90">Secure Payment Gateway</p>
+                        </div>
+
+                        {/* Payment Details */}
+                        <div className="p-6 space-y-4">
+                            <div className="text-center">
+                                <p className="text-sm text-muted-foreground">Amount to Pay</p>
+                                <p className="text-4xl font-bold text-primary">₹{finalPrice.toFixed(2)}</p>
+                            </div>
+
+                            <div className="bg-muted/50 rounded-lg p-4 space-y-2">
+                                <div className="flex justify-between text-sm">
+                                    <span className="text-muted-foreground">Points Used:</span>
+                                    <span className="font-medium">{pointsToUse.toLocaleString()} pts</span>
+                                </div>
+                                <div className="flex justify-between text-sm">
+                                    <span className="text-muted-foreground">Event:</span>
+                                    <span className="font-medium">{eventName}</span>
+                                </div>
+                                <div className="flex justify-between text-sm">
+                                    <span className="text-muted-foreground">Seats:</span>
+                                    <span className="font-medium">{selectedSeats.length} seat(s)</span>
+                                </div>
+                            </div>
+
+                            <div className="space-y-3">
+                                {/* PayPal SDK renders buttons here */}
+                                {paypalLoaded ? (
+                                    <div id="seat-paypal-button-container" className="min-h-[50px]" />
+                                ) : (
+                                    <div className="flex items-center justify-center h-12">
+                                        <div className="animate-spin rounded-full h-6 w-6 border-2 border-blue-600 border-t-transparent" />
+                                        <span className="ml-2 text-sm text-muted-foreground">Loading PayPal...</span>
+                                    </div>
+                                )}
+
+                                {paypalProcessing && (
+                                    <div className="flex items-center justify-center py-2">
+                                        <div className="animate-spin rounded-full h-5 w-5 border-2 border-blue-600 border-t-transparent mr-2" />
+                                        <span className="text-sm">Processing payment...</span>
+                                    </div>
+                                )}
+
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setShowPaypalModal(false)}
+                                    className="w-full"
+                                    disabled={paypalProcessing}
+                                >
+                                    Cancel
+                                </Button>
+                            </div>
+
+                            <p className="text-xs text-center text-muted-foreground">
+                                🔒 Your payment is secured with 256-bit encryption
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

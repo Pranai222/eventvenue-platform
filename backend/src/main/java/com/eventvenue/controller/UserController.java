@@ -4,12 +4,15 @@ import com.eventvenue.dto.ApiResponse;
 import com.eventvenue.entity.User;
 import com.eventvenue.entity.PointHistory;
 import com.eventvenue.service.UserService;
+import com.eventvenue.service.PointsService;
 import com.eventvenue.repository.PointHistoryRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
+import java.util.HashMap;
 import java.util.Optional;
 import java.util.List;
 
@@ -23,6 +26,9 @@ public class UserController {
 
     @Autowired
     private PointHistoryRepository pointHistoryRepository;
+    
+    @Autowired
+    private PointsService pointsService;
 
     @GetMapping("/profile")
     public ResponseEntity<ApiResponse> getUserProfile(Authentication authentication) {
@@ -107,6 +113,35 @@ public class UserController {
                     .success(true)
                     .message("User points retrieved")
                     .data(userOptional.get().getPoints())
+                    .build());
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(ApiResponse.builder()
+                    .success(false)
+                    .message(e.getMessage())
+                    .build());
+        }
+    }
+    
+    @PostMapping("/points/purchase")
+    public ResponseEntity<ApiResponse> purchasePoints(
+            @RequestBody Map<String, Object> request,
+            Authentication authentication) {
+        try {
+            Long userId = Long.parseLong(authentication.getPrincipal().toString());
+            Long points = Long.parseLong(request.get("points").toString());
+            String paymentMethod = request.getOrDefault("paymentMethod", "PAYPAL").toString();
+            String transactionId = request.getOrDefault("transactionId", "").toString();
+            
+            User updatedUser = pointsService.purchasePoints(userId, points, paymentMethod, transactionId);
+            
+            Map<String, Object> data = new HashMap<>();
+            data.put("points", updatedUser.getPoints());
+            data.put("pointsPurchased", points);
+            
+            return ResponseEntity.ok(ApiResponse.builder()
+                    .success(true)
+                    .message("Points purchased successfully")
+                    .data(data)
                     .build());
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(ApiResponse.builder()

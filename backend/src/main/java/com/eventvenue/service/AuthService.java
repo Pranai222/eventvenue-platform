@@ -89,7 +89,7 @@ public class AuthService {
                 .lastName(request.getLastName())
                 .phone(request.getPhone())
                 .role("VENDOR")
-                .points(0L)
+                .points(200L)  // Vendors get 200 welcome points
                 .isVerified(false)
                 .build();
 
@@ -102,6 +102,7 @@ public class AuthService {
                 .description(request.getBusinessDescription())
                 .status("PENDING")
                 .isActive(true)
+                .points(200L)  // Also set on vendor entity
                 .build();
 
         vendorRepository.save(vendor);
@@ -117,7 +118,8 @@ public class AuthService {
                 .lastName(user.getLastName())
                 .businessName(vendor.getBusinessName())
                 .businessDescription(vendor.getDescription())
-                .message("Vendor registered successfully. Pending admin approval")
+                .points(200L)  // Include points in response
+                .message("Vendor registered successfully. You received 200 welcome points!")
                 .build();
     }
 

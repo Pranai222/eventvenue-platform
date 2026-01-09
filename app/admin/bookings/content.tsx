@@ -1,22 +1,36 @@
-"use client"
+﻿"use client"
 
 import { useEffect, useState } from "react"
 import { adminApi } from "@/lib/api/admin"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { Calendar, Users, DollarSign, Search } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Calendar, Users, IndianRupee, Search, ChevronDown, ChevronUp } from "lucide-react"
 import type { Booking } from "@/lib/types/booking"
+
+const INITIAL_DISPLAY_COUNT = 10
 
 export default function AdminBookingsContent() {
   const [bookings, setBookings] = useState<Booking[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [isLoading, setIsLoading] = useState(true)
+  const [showAll, setShowAll] = useState(false)
 
   useEffect(() => {
     adminApi
       .getAllBookings()
-      .then(setBookings)
+      .then((response) => {
+        // Extract data array from response
+        const data = Array.isArray(response) ? response : (response as any)?.data || []
+        // Sort by most recent first (using id as fallback if no createdAt)
+        const sorted = [...data].sort((a: Booking, b: Booking) => {
+          const dateA = a.createdAt ? new Date(a.createdAt).getTime() : a.id
+          const dateB = b.createdAt ? new Date(b.createdAt).getTime() : b.id
+          return dateB - dateA
+        })
+        setBookings(sorted)
+      })
       .catch(console.error)
       .finally(() => setIsLoading(false))
   }, [])
@@ -25,6 +39,13 @@ export default function AdminBookingsContent() {
     (booking) =>
       booking.id.toString().includes(searchTerm) || booking.status.toLowerCase().includes(searchTerm.toLowerCase()),
   )
+
+  // Limit displayed bookings unless showAll is true or user is searching
+  const displayedBookings = searchTerm || showAll
+    ? filteredBookings
+    : filteredBookings.slice(0, INITIAL_DISPLAY_COUNT)
+
+  const hasMoreBookings = filteredBookings.length > INITIAL_DISPLAY_COUNT
 
   const getStatusBadgeVariant = (status: string) => {
     switch (status) {
@@ -54,9 +75,15 @@ export default function AdminBookingsContent() {
 
   return (
     <div className="container mx-auto px-4 py-8 space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold mb-2">Bookings</h1>
-        <p className="text-muted-foreground">View and manage all platform bookings</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold mb-2">Bookings</h1>
+          <p className="text-muted-foreground">View and manage all platform bookings</p>
+        </div>
+        <div className="text-right">
+          <p className="text-2xl font-bold">{bookings.length}</p>
+          <p className="text-sm text-muted-foreground">Total Bookings</p>
+        </div>
       </div>
 
       {/* Search */}
@@ -70,9 +97,19 @@ export default function AdminBookingsContent() {
         />
       </div>
 
+      {/* Showing count info */}
+      {!searchTerm && hasMoreBookings && (
+        <div className="flex items-center justify-between text-sm text-muted-foreground">
+          <span>
+            Showing {showAll ? filteredBookings.length : Math.min(INITIAL_DISPLAY_COUNT, filteredBookings.length)} of {filteredBookings.length} bookings
+            {!showAll && " (most recent)"}
+          </span>
+        </div>
+      )}
+
       {/* Bookings Table */}
       <div className="space-y-4">
-        {filteredBookings.length === 0 ? (
+        {displayedBookings.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12">
               <Calendar className="h-12 w-12 text-muted-foreground/50 mb-4" />
@@ -94,7 +131,7 @@ export default function AdminBookingsContent() {
                 </tr>
               </thead>
               <tbody>
-                {filteredBookings.map((booking) => (
+                {displayedBookings.map((booking) => (
                   <tr key={booking.id} className="border-b border-border hover:bg-muted/50 transition-colors">
                     <td className="py-3 px-4 text-sm font-medium">#{booking.id}</td>
                     <td className="py-3 px-4 text-sm">{booking.userId}</td>
@@ -103,7 +140,7 @@ export default function AdminBookingsContent() {
                     </td>
                     <td className="py-3 px-4 text-sm">{new Date(booking.startDate).toLocaleDateString()}</td>
                     <td className="py-3 px-4 text-sm flex items-center gap-1">
-                      <DollarSign className="h-4 w-4 text-muted-foreground" />
+                      <IndianRupee className="h-4 w-4 text-muted-foreground" />
                       {booking.totalAmount.toFixed(2)}
                     </td>
                     <td className="py-3 px-4 text-sm">
@@ -118,6 +155,29 @@ export default function AdminBookingsContent() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* View All / Show Less Button */}
+        {!searchTerm && hasMoreBookings && (
+          <div className="flex justify-center pt-4">
+            <Button
+              variant="outline"
+              onClick={() => setShowAll(!showAll)}
+              className="gap-2"
+            >
+              {showAll ? (
+                <>
+                  <ChevronUp className="h-4 w-4" />
+                  Show Less
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="h-4 w-4" />
+                  View All ({filteredBookings.length - INITIAL_DISPLAY_COUNT} more)
+                </>
+              )}
+            </Button>
           </div>
         )}
       </div>
@@ -141,9 +201,9 @@ export default function AdminBookingsContent() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-muted-foreground mb-1">Total Revenue</p>
-                <p className="text-2xl font-bold">${bookings.reduce((sum, b) => sum + b.totalAmount, 0).toFixed(2)}</p>
+                <p className="text-2xl font-bold">₹{bookings.reduce((sum, b) => sum + b.totalAmount, 0).toFixed(2)}</p>
               </div>
-              <DollarSign className="h-8 w-8 text-accent/50" />
+              <IndianRupee className="h-8 w-8 text-accent/50" />
             </div>
           </CardContent>
         </Card>
@@ -163,3 +223,4 @@ export default function AdminBookingsContent() {
     </div>
   )
 }
+

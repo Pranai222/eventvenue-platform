@@ -42,6 +42,9 @@ public class EventService {
     
     @Autowired
     private PointsService pointsService;
+    
+    @Autowired
+    private AuditLogService auditLogService;
 
     /**
      * Create event and deduct platform fee from vendor
@@ -73,7 +76,13 @@ public class EventService {
                 " points from vendor " + vendor.getId() + " for " + bookingType + " event creation");
         }
         
-        return eventRepository.save(event);
+        Event saved = eventRepository.save(event);
+        
+        // Audit log event creation
+        auditLogService.log("EVENT_CREATED", "EVENT", saved.getId(), 
+            "Event created: " + saved.getName() + " by vendor " + saved.getVendorId());
+        
+        return saved;
     }
 
     public Optional<Event> getEventById(Long id) {
@@ -113,6 +122,41 @@ public class EventService {
         Optional<Event> eventOptional = eventRepository.findById(id);
         if (eventOptional.isPresent()) {
             Event event = eventOptional.get();
+            
+            // Check if location/time is being changed - these have 2-edit limit
+            boolean locationTimeChanged = false;
+            if (eventDetails.getLocation() != null && !eventDetails.getLocation().equals(event.getLocation())) {
+                locationTimeChanged = true;
+            }
+            if (eventDetails.getEventTime() != null && !eventDetails.getEventTime().equals(event.getEventTime())) {
+                locationTimeChanged = true;
+            }
+            
+            // Enforce 2-edit limit for location/time changes
+            if (locationTimeChanged) {
+                if (event.getIsEditLocked() != null && event.getIsEditLocked()) {
+                    throw new RuntimeException("Location/Time editing is locked. Maximum 2 edits allowed.");
+                }
+                
+                Integer currentEditCount = event.getEditCount() != null ? event.getEditCount() : 0;
+                if (currentEditCount >= 2) {
+                    event.setIsEditLocked(true);
+                    eventRepository.save(event);
+                    throw new RuntimeException("Location/Time editing is locked. Maximum 2 edits allowed.");
+                }
+                
+                // Increment edit count
+                event.setEditCount(currentEditCount + 1);
+                
+                // Lock after 2nd edit
+                if (currentEditCount + 1 >= 2) {
+                    event.setIsEditLocked(true);
+                }
+                
+                System.out.println("[EVENT EDIT] Event " + id + " location/time edit count: " + (currentEditCount + 1) + "/2");
+            }
+            
+            // Apply updates
             if (eventDetails.getName() != null) {
                 event.setName(eventDetails.getName());
             }
@@ -138,13 +182,32 @@ public class EventService {
             if (eventDetails.getTicketsAvailable() != null) {
                 event.setTicketsAvailable(eventDetails.getTicketsAvailable());
             }
-            return eventRepository.save(event);
+            if (eventDetails.getVendorPhone() != null) {
+                event.setVendorPhone(eventDetails.getVendorPhone());
+            }
+            if (eventDetails.getEventTime() != null) {
+                event.setEventTime(eventDetails.getEventTime());
+            }
+            Event saved = eventRepository.save(event);
+            
+            // Audit log event update
+            auditLogService.log("EVENT_UPDATED", "EVENT", saved.getId(), 
+                "Event updated: " + saved.getName());
+            
+            return saved;
         }
         throw new RuntimeException("Event not found");
     }
 
     public void deleteEvent(Long id) {
+        Optional<Event> eventOpt = eventRepository.findById(id);
+        String eventName = eventOpt.map(Event::getName).orElse("Unknown");
+        
         eventRepository.deleteById(id);
+        
+        // Audit log event deletion
+        auditLogService.log("EVENT_DELETED", "EVENT", id, 
+            "Event deleted: " + eventName);
     }
 
     public List<Event> getAllEvents() {
@@ -204,6 +267,10 @@ public class EventService {
         notifyBookedUsersOfReschedule(eventId, event.getName(), oldEventDate, oldEventTime, 
                                        oldLocation, newEventDate, newEventTime, newLocation, reason);
         
+        // Audit log event reschedule
+        auditLogService.log("EVENT_RESCHEDULED", "EVENT", savedEvent.getId(), 
+            "Event rescheduled: " + savedEvent.getName() + ". Reason: " + reason);
+        
         return savedEvent;
     }
     
@@ -234,6 +301,10 @@ public class EventService {
         
         // Refund all booked users 100%
         refundAllBookedUsers(eventId, event.getName(), reason);
+        
+        // Audit log event cancellation
+        auditLogService.log("EVENT_CANCELLED", "EVENT", savedEvent.getId(), 
+            "Event cancelled: " + savedEvent.getName() + ". Reason: " + reason);
         
         return savedEvent;
     }
@@ -334,6 +405,19 @@ public class EventService {
             System.err.println("[REFUND] Failed to refund users: " + e.getMessage());
             throw new RuntimeException("Failed to process refunds: " + e.getMessage());
         }
+    }
+    
+    /**
+     * Get event with vendor business info (for user display)
+     * Returns EventDTO with vendor businessName, businessPhone, and email
+     */
+    public com.eventvenue.dto.EventDTO getEventWithVendorInfo(Event event) {
+        Vendor vendor = null;
+        if (event.getVendorId() != null) {
+            Optional<Vendor> vendorOpt = vendorRepository.findById(event.getVendorId());
+            vendor = vendorOpt.orElse(null);
+        }
+        return com.eventvenue.dto.EventDTO.fromEvent(event, vendor);
     }
 }
 

@@ -1,4 +1,4 @@
-import { Suspense } from "react"
+﻿import { Suspense } from "react"
 import AdminBookingsContent from "./content"
 import Loading from "./loading"
 

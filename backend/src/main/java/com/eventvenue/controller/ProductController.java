@@ -11,7 +11,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/products")
-@CrossOrigin(origins = "*", maxAge = 3600)
+@CrossOrigin(origins = {"http://localhost:3000", "http://localhost:8000"})
 public class ProductController {
     
     @Autowired

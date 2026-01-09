@@ -162,14 +162,18 @@ export const eventsApi = {
     return response
   },
 
-  bookSeats: async (eventId: number, seatIds: number[], pointsToUse: number = 0) => {
+  bookSeats: async (eventId: number, seatIds: number[], pointsToUse: number = 0, paypalTransactionId?: string) => {
     const response = await apiClient.post<{
       success: boolean
       message: string
       bookingId?: number
       totalAmount?: number
       quantity?: number
-    }>(`/api/events/${eventId}/seats/book`, { seatIds, pointsToUse })
+    }>(`/api/events/${eventId}/seats/book`, {
+      seatIds,
+      pointsToUse,
+      paypalTransactionId: paypalTransactionId || null
+    })
     return response
   },
 }

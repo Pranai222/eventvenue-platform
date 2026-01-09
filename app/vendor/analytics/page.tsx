@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
@@ -57,6 +57,26 @@ export default function VendorAnalyticsPage() {
 
     useEffect(() => {
         async function loadData() {
+            // Check for auth token first
+            const token = localStorage.getItem("auth_token")
+            const userStr = localStorage.getItem("auth_user")
+
+            if (!token || !userStr) {
+                window.location.href = "/login?role=vendor"
+                return
+            }
+
+            try {
+                const user = JSON.parse(userStr)
+                if (user.role !== "VENDOR") {
+                    window.location.href = "/login?role=vendor"
+                    return
+                }
+            } catch {
+                window.location.href = "/login?role=vendor"
+                return
+            }
+
             try {
                 const profileResponse = await authApi.getVendorProfile()
                 const profileData = profileResponse as VendorProfile
@@ -232,7 +252,7 @@ export default function VendorAnalyticsPage() {
                         </div>
                         <div className="text-right md:text-center px-4 py-2 bg-white/50 rounded-lg">
                             <p className="text-3xl font-bold text-green-700">
-                                ${((profile?.points || 0) / conversionRate).toFixed(2)}
+                                ₹{((profile?.points || 0) / conversionRate).toFixed(2)}
                             </p>
                             <p className="text-xs text-muted-foreground">Equivalent Cash Value</p>
                         </div>
@@ -243,13 +263,13 @@ export default function VendorAnalyticsPage() {
                                 onClick={() => {
                                     const points = profile?.points || 0;
                                     const cashValue = (points / conversionRate).toFixed(2);
-                                    const subject = encodeURIComponent(`Payout Request - ${points} Points ($${cashValue})`);
+                                    const subject = encodeURIComponent(`Payout Request - ${points} Points (₹${cashValue})`);
                                     const body = encodeURIComponent(
                                         `Hello Admin,\n\nI would like to request a payout for my vendor points.\n\n` +
                                         `Vendor: ${profile?.businessName || 'N/A'}\n` +
                                         `Email: ${profile?.email || 'N/A'}\n` +
                                         `Points: ${points.toLocaleString()}\n` +
-                                        `Cash Value: $${cashValue} (at ${conversionRate} points = $1)\n\n` +
+                                        `Cash Value: ₹${cashValue} (at ${conversionRate} points = ₹1)\n\n` +
                                         `Please process this payout request at your earliest convenience.\n\nThank you!`
                                     );
                                     window.location.href = `mailto:admin@eventvenue.com?subject=${subject}&body=${body}`;
@@ -265,7 +285,7 @@ export default function VendorAnalyticsPage() {
                     {/* Conversion Rate Info */}
                     <div className="mt-4 p-3 bg-muted/50 rounded-lg flex items-center justify-between">
                         <span className="text-sm text-muted-foreground">Conversion Rate</span>
-                        <span className="text-lg font-semibold text-primary">{conversionRate} pts = $1.00</span>
+                        <span className="text-lg font-semibold text-primary">{conversionRate} pts = ₹1.00</span>
                     </div>
 
                     <p className="text-xs text-muted-foreground mt-3">
@@ -285,7 +305,7 @@ export default function VendorAnalyticsPage() {
                             <DollarSign className="h-4 w-4 text-green-600" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold">${revenue.allTime.toFixed(2)}</div>
+                            <div className="text-2xl font-bold">₹{revenue.allTime.toFixed(2)}</div>
                             <p className="text-xs text-muted-foreground">Total earnings</p>
                         </CardContent>
                     </Card>
@@ -296,7 +316,7 @@ export default function VendorAnalyticsPage() {
                             <TrendingUp className="h-4 w-4 text-blue-600" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold">${revenue.thisMonth.toFixed(2)}</div>
+                            <div className="text-2xl font-bold">₹{revenue.thisMonth.toFixed(2)}</div>
                             <p className="text-xs text-muted-foreground">Last 30 days</p>
                         </CardContent>
                     </Card>
@@ -307,7 +327,7 @@ export default function VendorAnalyticsPage() {
                             <Calendar className="h-4 w-4 text-purple-600" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold">${revenue.thisWeek.toFixed(2)}</div>
+                            <div className="text-2xl font-bold">₹{revenue.thisWeek.toFixed(2)}</div>
                             <p className="text-xs text-muted-foreground">Last 7 days</p>
                         </CardContent>
                     </Card>
@@ -318,7 +338,7 @@ export default function VendorAnalyticsPage() {
                             <DollarSign className="h-4 w-4 text-orange-600" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-2xl font-bold">${revenue.today.toFixed(2)}</div>
+                            <div className="text-2xl font-bold">₹{revenue.today.toFixed(2)}</div>
                             <p className="text-xs text-muted-foreground">Today's earnings</p>
                         </CardContent>
                     </Card>
@@ -360,7 +380,7 @@ export default function VendorAnalyticsPage() {
                         </CardHeader>
                         <CardContent>
                             <div className="text-2xl font-bold">
-                                ${bookingStats.total > 0 ? (revenue.allTime / bookingStats.total).toFixed(2) : "0.00"}
+                                ₹{bookingStats.total > 0 ? (revenue.allTime / bookingStats.total).toFixed(2) : "0.00"}
                             </div>
                             <p className="text-xs text-muted-foreground">Per booking</p>
                         </CardContent>
@@ -570,7 +590,7 @@ export default function VendorAnalyticsPage() {
                                         </div>
                                     </div>
                                     <div className="text-right">
-                                        <p className="font-bold text-green-600">${venue.revenue.toFixed(2)}</p>
+                                        <p className="font-bold text-green-600">₹{venue.revenue.toFixed(2)}</p>
                                         <p className="text-xs text-muted-foreground">Total revenue</p>
                                     </div>
                                 </div>
@@ -607,7 +627,7 @@ export default function VendorAnalyticsPage() {
                                         </p>
                                     </div>
                                     <div className="flex items-center gap-3">
-                                        <p className="font-medium">${Number(booking.totalAmount).toFixed(2)}</p>
+                                        <p className="font-medium">₹{Number(booking.totalAmount).toFixed(2)}</p>
                                         <Badge
                                             variant={
                                                 booking.status === "CONFIRMED"

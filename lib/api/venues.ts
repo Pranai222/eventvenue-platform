@@ -16,8 +16,14 @@ export interface VenueData {
   isAvailable: boolean
   rating: number
   totalBookings: number
+  vendorPhone: string
+  editCount?: number
+  isEditLocked?: boolean
   createdAt?: string
   updatedAt?: string
+  vendorBusinessName?: string
+  vendorBusinessPhone?: string
+  vendorEmail?: string
 }
 
 const convertToVenue = (data: VenueData): Venue => ({
@@ -39,6 +45,12 @@ const convertToVenue = (data: VenueData): Venue => ({
   rating: data.rating,
   reviewCount: data.totalBookings,
   totalBookings: data.totalBookings,
+  vendorPhone: data.vendorPhone || '',
+  editCount: data.editCount,
+  isEditLocked: data.isEditLocked,
+  vendorBusinessName: data.vendorBusinessName,
+  vendorBusinessPhone: data.vendorBusinessPhone,
+  vendorEmail: data.vendorEmail,
 })
 
 export const venuesApi = {
@@ -123,14 +135,18 @@ export const venuesApi = {
 
   checkAvailability: async (venueId: number, startDate: string, endDate: string) => {
     try {
-      const venue = await venuesApi.getById(venueId)
-      // For now, check if venue is available - in production, would validate against actual bookings
-      return { available: venue.isAvailable }
+      // Call backend API to check actual booking availability
+      // The backend checks if venue is published and if it's generally available
+      const response = await apiClient.get<{ available: boolean }>(
+        `/api/venues/${venueId}/check-availability?date=${startDate}`
+      )
+      return { available: response.available }
     } catch (error) {
       console.error("[EventVenue] Failed to check availability:", error)
       return { available: false }
     }
   },
+
 
   publish: async (id: number) => {
     const response = await apiClient.put<VenueData>(`/api/venues/${id}/publish`, {})

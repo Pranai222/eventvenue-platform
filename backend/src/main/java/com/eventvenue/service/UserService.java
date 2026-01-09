@@ -21,11 +21,22 @@ public class UserService {
 
     @Autowired
     private JwtTokenProvider jwtTokenProvider;
+    
+    @Autowired
+    private AuditLogService auditLogService;
 
     public AuthResponse registerUserResponse(String email, String password, String firstName, String lastName, String phone, String username) {
         // Check if email already registered as USER (allow same email for different roles)
-        if (userRepository.existsByEmailAndRole(email, "USER")) {
-            throw new RuntimeException("Email already exists as a user");
+        Optional<User> existingUser = userRepository.findByEmailAndRole(email, "USER");
+        if (existingUser.isPresent()) {
+            User user = existingUser.get();
+            // If unverified, delete and allow re-registration
+            if (!user.getIsVerified()) {
+                userRepository.delete(user);
+                System.out.println("[pranai] Deleted unverified user for re-registration: " + email);
+            } else {
+                throw new RuntimeException("Email already exists as a verified user");
+            }
         }
 
         User user = User.builder()
@@ -42,6 +53,10 @@ public class UserService {
 
         user = userRepository.save(user);
         String token = jwtTokenProvider.generateToken(user.getId(), user.getEmail(), "USER");
+        
+        // Audit log user registration
+        auditLogService.log("USER_REGISTERED", "USER", user.getId(), 
+            "New user registered: " + user.getEmail());
         
         return AuthResponse.builder()
                 .token(token)
@@ -76,6 +91,10 @@ public class UserService {
 
     public Optional<User> findByEmail(String email) {
         return userRepository.findByEmail(email);
+    }
+    
+    public Optional<User> findByEmailAndRole(String email, String role) {
+        return userRepository.findByEmailAndRole(email, role);
     }
 
     public Optional<User> findById(Long id) {

@@ -24,6 +24,9 @@ public class AdminService {
     
     @Autowired
     private SystemSettingsRepository systemSettingsRepository;
+    
+    @Autowired
+    private AuditLogService auditLogService;
 
     public List<User> getAllUsers() {
         return userRepository.findAll();
@@ -104,6 +107,11 @@ public class AdminService {
         }
         
         systemSettingsRepository.save(setting);
+        
+        // Audit log settings update
+        auditLogService.log("SETTINGS_UPDATED", "SETTINGS", null, 
+            "Conversion rate updated to: " + pointsPerDollar + " points per dollar", "ADMIN", "ADMIN", null);
+        
         return new ConversionRateResponse(pointsPerDollar);
     }
 
@@ -121,5 +129,87 @@ public class AdminService {
         public void setPointsPerDollar(int pointsPerDollar) {
             this.pointsPerDollar = pointsPerDollar;
         }
+    }
+
+    // Platform fees constants
+    public static final String USER_PLATFORM_FEE_POINTS = "user_platform_fee_points";
+    public static final String VENUE_CREATION_POINTS = "venue_creation_points";
+    public static final String EVENT_CREATION_POINTS_QUANTITY = "event_creation_points_quantity";
+    public static final String EVENT_CREATION_POINTS_SEAT = "event_creation_points_seat";
+
+    /**
+     * Get all platform fee settings
+     */
+    public PlatformFeesResponse getPlatformFees() {
+        int userFee = getSettingAsInt(USER_PLATFORM_FEE_POINTS, 2);
+        int venueCreation = getSettingAsInt(VENUE_CREATION_POINTS, 10);
+        int eventQuantity = getSettingAsInt(EVENT_CREATION_POINTS_QUANTITY, 10);
+        int eventSeat = getSettingAsInt(EVENT_CREATION_POINTS_SEAT, 20);
+        
+        return new PlatformFeesResponse(userFee, venueCreation, eventQuantity, eventSeat);
+    }
+
+    /**
+     * Update platform fee settings
+     */
+    @Transactional
+    public PlatformFeesResponse updatePlatformFees(int userFee, int venueCreation, int eventQuantity, int eventSeat) {
+        updateSetting(USER_PLATFORM_FEE_POINTS, String.valueOf(userFee));
+        updateSetting(VENUE_CREATION_POINTS, String.valueOf(venueCreation));
+        updateSetting(EVENT_CREATION_POINTS_QUANTITY, String.valueOf(eventQuantity));
+        updateSetting(EVENT_CREATION_POINTS_SEAT, String.valueOf(eventSeat));
+        
+        auditLogService.log("SETTINGS_UPDATED", "SETTINGS", null, 
+            "Platform fees updated: user=" + userFee + ", venue=" + venueCreation + 
+            ", eventQty=" + eventQuantity + ", eventSeat=" + eventSeat, "ADMIN", "ADMIN", null);
+        
+        return new PlatformFeesResponse(userFee, venueCreation, eventQuantity, eventSeat);
+    }
+
+    private int getSettingAsInt(String key, int defaultValue) {
+        Optional<SystemSettings> setting = systemSettingsRepository.findBySettingKey(key);
+        if (setting.isPresent()) {
+            try {
+                return Integer.parseInt(setting.get().getSettingValue());
+            } catch (NumberFormatException e) {
+                return defaultValue;
+            }
+        }
+        return defaultValue;
+    }
+
+    private void updateSetting(String key, String value) {
+        Optional<SystemSettings> settingOpt = systemSettingsRepository.findBySettingKey(key);
+        SystemSettings setting;
+        if (settingOpt.isPresent()) {
+            setting = settingOpt.get();
+            setting.setSettingValue(value);
+        } else {
+            setting = new SystemSettings(key, value);
+        }
+        systemSettingsRepository.save(setting);
+    }
+
+    public static class PlatformFeesResponse {
+        private int userPlatformFeePoints;
+        private int venueCreationPoints;
+        private int eventCreationPointsQuantity;
+        private int eventCreationPointsSeat;
+
+        public PlatformFeesResponse(int userFee, int venue, int eventQty, int eventSeat) {
+            this.userPlatformFeePoints = userFee;
+            this.venueCreationPoints = venue;
+            this.eventCreationPointsQuantity = eventQty;
+            this.eventCreationPointsSeat = eventSeat;
+        }
+
+        public int getUserPlatformFeePoints() { return userPlatformFeePoints; }
+        public void setUserPlatformFeePoints(int v) { this.userPlatformFeePoints = v; }
+        public int getVenueCreationPoints() { return venueCreationPoints; }
+        public void setVenueCreationPoints(int v) { this.venueCreationPoints = v; }
+        public int getEventCreationPointsQuantity() { return eventCreationPointsQuantity; }
+        public void setEventCreationPointsQuantity(int v) { this.eventCreationPointsQuantity = v; }
+        public int getEventCreationPointsSeat() { return eventCreationPointsSeat; }
+        public void setEventCreationPointsSeat(int v) { this.eventCreationPointsSeat = v; }
     }
 }

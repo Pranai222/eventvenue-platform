@@ -24,7 +24,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private static final List<String> PUBLIC_ENDPOINTS = Arrays.asList(
         "/api/auth",
         "/api/admin/create-admin",
-        "/api/health"
+        "/api/admin/settings/conversion-rate",
+        "/api/admin/settings/platform-fees",
+        "/api/health",
+        "/api/withdrawals",
+        "/api/credit-requests"
+        // Note: /api/events is NOT fully public - vendor endpoints need auth
+        // Public event access is handled by SecurityConfig permitAll for GET
     );
 
     @Override
@@ -46,10 +52,17 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
         
+        // Check if it's a public endpoint (but NOT /api/events/vendor which needs auth)
         boolean isPublicEndpoint = PUBLIC_ENDPOINTS.stream()
             .anyMatch(publicPath -> requestPath.startsWith(publicPath));
+        
+        // Events: Only public GET requests are allowed without auth
+        // /api/events/vendor/** requires VENDOR auth
+        boolean isPublicEventAccess = requestPath.startsWith("/api/events") 
+            && !requestPath.startsWith("/api/events/vendor")
+            && "GET".equals(method);
 
-        if (isPublicEndpoint) {
+        if (isPublicEndpoint || isPublicEventAccess) {
             System.out.println("[JWT Filter] Public endpoint - no auth required");
             System.out.println("[JWT Filter] ===============================\n");
             filterChain.doFilter(request, response);

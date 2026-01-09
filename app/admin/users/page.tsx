@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useEffect, useState } from "react"
 import { adminApi } from "@/lib/api/admin"
@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Users, Coins, Search, Trash2, Shield, Briefcase, User as UserIcon } from "lucide-react"
+import { Users, Coins, Search, Trash2, Shield, Briefcase, User as UserIcon, AlertTriangle } from "lucide-react"
 import type { User } from "@/lib/types/auth"
 import {
   Dialog,
@@ -17,6 +17,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Label } from "@/components/ui/label"
 
 export default function AdminUsersPage() {
@@ -24,9 +34,11 @@ export default function AdminUsersPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [isLoading, setIsLoading] = useState(true)
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
+  const [deleteUser, setDeleteUser] = useState<User | null>(null)
   const [pointsToAdjust, setPointsToAdjust] = useState(0)
   const [adjustReason, setAdjustReason] = useState("")
   const [activeTab, setActiveTab] = useState("all")
+  const [isDeleting, setIsDeleting] = useState(false)
 
   useEffect(() => {
     adminApi
@@ -38,13 +50,17 @@ export default function AdminUsersPage() {
       .finally(() => setIsLoading(false))
   }, [])
 
-  const handleDelete = async (id: number) => {
-    if (!confirm("Are you sure you want to delete this user? This action cannot be undone.")) return
+  const handleDeleteConfirm = async () => {
+    if (!deleteUser) return
+    setIsDeleting(true)
     try {
-      await adminApi.deleteUser(id)
-      setUsers(users.filter((u) => u.id !== id))
+      await adminApi.deleteUser(deleteUser.id)
+      setUsers(users.filter((u) => u.id !== deleteUser.id))
+      setDeleteUser(null)
     } catch (error) {
       alert("Failed to delete user")
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -86,7 +102,10 @@ export default function AdminUsersPage() {
   // Categorize users by role
   const allUsers = filteredUsers
   const adminUsers = filteredUsers.filter(u => u.role === "ADMIN")
+  // Show ALL vendors (verified and unverified) so admin can manage them
   const vendorUsers = filteredUsers.filter(u => u.role === "VENDOR")
+  const verifiedVendors = vendorUsers.filter(u => u.isVerified)
+  const unverifiedVendors = vendorUsers.filter(u => !u.isVerified)
   const regularUsers = filteredUsers.filter(u => u.role === "USER")
 
   const renderUsersList = (usersList: User[], emptyMessage: string) => {
@@ -120,7 +139,10 @@ export default function AdminUsersPage() {
                   <div className="flex-1">
                     <div className="flex items-start justify-between mb-2">
                       <div>
-                        <h3 className="font-semibold text-lg mb-1">{getDisplayName(user)}</h3>
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="font-semibold text-lg">{getDisplayName(user)}</h3>
+                          <Badge variant="outline" className="text-xs">ID: {user.id}</Badge>
+                        </div>
                         <p className="text-sm text-muted-foreground mb-2">{user.email}</p>
                         <div className="flex items-center gap-2 flex-wrap">
                           <Badge variant={
@@ -158,8 +180,8 @@ export default function AdminUsersPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => handleDelete(user.id)}
-                        className="gap-2 text-destructive"
+                        onClick={() => setDeleteUser(user)}
+                        className="gap-2 text-destructive hover:bg-destructive/10"
                       >
                         <Trash2 className="h-4 w-4" />
                         Delete
@@ -240,7 +262,15 @@ export default function AdminUsersPage() {
         </TabsContent>
 
         <TabsContent value="vendors" className="mt-6">
-          {renderUsersList(vendorUsers, "No vendor users found")}
+          <div className="mb-4 flex gap-2">
+            <Badge variant="default" className="text-xs">
+              {verifiedVendors.length} Verified
+            </Badge>
+            <Badge variant="secondary" className="text-xs">
+              {unverifiedVendors.length} Unverified
+            </Badge>
+          </div>
+          {renderUsersList(vendorUsers, "No vendors found")}
         </TabsContent>
 
         <TabsContent value="users" className="mt-6">
@@ -295,6 +325,64 @@ export default function AdminUsersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete User Confirmation Dialog */}
+      <AlertDialog open={!!deleteUser} onOpenChange={() => setDeleteUser(null)}>
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center">
+                <AlertTriangle className="h-6 w-6 text-destructive" />
+              </div>
+              <div>
+                <AlertDialogTitle className="text-lg">Delete User</AlertDialogTitle>
+                <AlertDialogDescription className="text-sm">
+                  This action cannot be undone
+                </AlertDialogDescription>
+              </div>
+            </div>
+          </AlertDialogHeader>
+
+          {deleteUser && (
+            <div className="bg-muted/50 rounded-lg p-4 my-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                  {deleteUser.role === "VENDOR" ? (
+                    <Briefcase className="h-5 w-5 text-primary" />
+                  ) : deleteUser.role === "ADMIN" ? (
+                    <Shield className="h-5 w-5 text-primary" />
+                  ) : (
+                    <UserIcon className="h-5 w-5 text-primary" />
+                  )}
+                </div>
+                <div>
+                  <p className="font-medium">{deleteUser.firstName || deleteUser.username || deleteUser.email.split('@')[0]}</p>
+                  <p className="text-sm text-muted-foreground">{deleteUser.email}</p>
+                  <div className="flex gap-2 mt-1">
+                    <Badge variant="outline" className="text-xs">{deleteUser.role}</Badge>
+                    <Badge variant="secondary" className="text-xs">{deleteUser.points?.toLocaleString() || 0} points</Badge>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <p className="text-sm text-muted-foreground">
+            Are you sure you want to permanently delete this user? All associated data including bookings, reviews, and points will be removed.
+          </p>
+
+          <AlertDialogFooter className="mt-4">
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? "Deleting..." : "Delete User"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

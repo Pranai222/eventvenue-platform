@@ -1,7 +1,8 @@
-"use client"
+﻿"use client"
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { eventsApi } from "@/lib/api/events"
 import { useAuth } from "@/lib/contexts/auth-context"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -16,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Calendar, MapPin, Ticket, Search, User, SlidersHorizontal, X, DollarSign, Filter, LogOut } from "lucide-react"
+import { Calendar, MapPin, Ticket, Search, User, SlidersHorizontal, X, DollarSign, Filter, LogOut, ArrowLeft, Star } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import type { Event } from "@/lib/types/booking"
@@ -49,13 +50,19 @@ export default function EventsPage() {
     maxPrice: "",
     dateFrom: "",
     dateTo: "",
+    rating: "",
   })
   const { user, logout } = useAuth()
+  const router = useRouter()
 
   useEffect(() => {
     eventsApi
       .getActive()
-      .then(setEvents)
+      .then((data) => {
+        // Sort by ID descending to show newest events first
+        const sortedEvents = Array.isArray(data) ? data.sort((a, b) => b.id - a.id) : []
+        setEvents(sortedEvents)
+      })
       .catch((error) => {
         console.error("[EventVenue] Failed to load events:", error)
         setEvents([])
@@ -105,6 +112,11 @@ export default function EventsPage() {
       if (eventDate > new Date(filters.dateTo)) return false
     }
 
+    // Rating filter
+    if (filters.rating && filters.rating !== "any") {
+      if ((event.rating || 0) < Number(filters.rating)) return false
+    }
+
     return true
   })
 
@@ -117,6 +129,7 @@ export default function EventsPage() {
       maxPrice: "",
       dateFrom: "",
       dateTo: "",
+      rating: "",
     })
   }
 
@@ -186,6 +199,12 @@ export default function EventsPage() {
       </header>
 
       <div className="container mx-auto px-4 py-8">
+        {/* Back Button */}
+        <Button variant="ghost" onClick={() => router.back()} className="mb-6 gap-2">
+          <ArrowLeft className="h-4 w-4" />
+          Back
+        </Button>
+
         {/* Hero Section */}
         <div className="mb-8 text-center">
           <h1 className="text-4xl md:text-5xl font-bold mb-3 bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
@@ -307,6 +326,29 @@ export default function EventsPage() {
                     onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
                   />
                 </div>
+
+                {/* Rating Filter */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium flex items-center gap-2">
+                    <Star className="h-4 w-4" />
+                    Minimum Rating
+                  </Label>
+                  <Select
+                    value={filters.rating}
+                    onValueChange={(value) => setFilters({ ...filters, rating: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Any rating" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="any">Any rating</SelectItem>
+                      <SelectItem value="4.5">4.5+ stars</SelectItem>
+                      <SelectItem value="4">4+ stars</SelectItem>
+                      <SelectItem value="3.5">3.5+ stars</SelectItem>
+                      <SelectItem value="3">3+ stars</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
               {/* Clear Filters */}
@@ -340,6 +382,9 @@ export default function EventsPage() {
                 <Badge variant="secondary">
                   ${filters.minPrice || 0} - ${filters.maxPrice || "∞"}
                 </Badge>
+              )}
+              {filters.rating && filters.rating !== "any" && (
+                <Badge variant="secondary">{filters.rating}+ stars</Badge>
               )}
             </div>
           )}
@@ -388,7 +433,7 @@ export default function EventsPage() {
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
                   <Badge className="absolute top-3 right-3 bg-primary/90">{event.category || "Event"}</Badge>
-                  <div className="absolute bottom-3 left-3 right-3">
+                  <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between">
                     <p className="text-white text-sm font-medium flex items-center gap-1">
                       <Calendar className="h-3 w-3" />
                       {new Date(event.eventDate || event.date).toLocaleDateString('en-US', {
@@ -397,6 +442,12 @@ export default function EventsPage() {
                         day: 'numeric'
                       })}
                     </p>
+                    {(event.rating || 0) > 0 && (
+                      <div className="flex items-center gap-1 text-white text-sm">
+                        <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                        <span>{event.rating?.toFixed(1)}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
                 <CardHeader className="pb-2">
@@ -424,7 +475,7 @@ export default function EventsPage() {
                 <CardContent>
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-2xl font-bold text-primary">${event.pricePerTicket}</p>
+                      <p className="text-2xl font-bold text-primary">₹{event.pricePerTicket}</p>
                       <p className="text-xs text-muted-foreground">per ticket</p>
                     </div>
                     <Link href={`/events/${event.id}`}>

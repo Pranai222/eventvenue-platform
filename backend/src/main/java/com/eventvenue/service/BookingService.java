@@ -1,13 +1,17 @@
 package com.eventvenue.service;
 
+import com.eventvenue.dto.BookingDTO;
 import com.eventvenue.entity.Booking;
 import com.eventvenue.entity.Venue;
 import com.eventvenue.entity.Event;
 import com.eventvenue.entity.Vendor;
+import com.eventvenue.entity.User;
+import com.eventvenue.entity.EventSeat;
 import com.eventvenue.repository.BookingRepository;
 import com.eventvenue.repository.VenueRepository;
 import com.eventvenue.repository.EventRepository;
 import com.eventvenue.repository.VendorRepository;
+import com.eventvenue.repository.EventSeatRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,6 +28,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.type.TypeReference;
 
 @Service
 public class BookingService {
@@ -56,6 +62,18 @@ public class BookingService {
     
     @Autowired
     private UserService userService;
+    
+    @Autowired
+    private com.eventvenue.repository.UserRepository userRepository;
+    
+    @Autowired
+    private SeatService seatService;
+    
+    @Autowired
+    private EventSeatRepository eventSeatRepository;
+    
+    @Autowired
+    private ObjectMapper objectMapper;
 
     public Booking createBooking(Booking booking) {
         Booking saved = bookingRepository.save(booking);
@@ -67,11 +85,16 @@ public class BookingService {
     @Transactional
     public Booking createBookingWithPoints(Long userId, Long venueId, Long eventId, 
                                           String bookingDate, String checkInTime, 
-                                          String checkOutTime, Integer durationHours, Integer quantity) {
+                                          String checkOutTime, Integer durationHours, Integer quantity,
+                                          Integer pointsToUse, String paypalTransactionId, Double remainingAmount,
+                                          Double totalAmount) {
         int conversionRate = adminService.getConversionRate().getPointsPerDollar();
-        Long pointsNeeded = calculatePointsNeeded(venueId, eventId, durationHours, quantity);
+        Long fullPointsNeeded = calculatePointsNeeded(venueId, eventId, durationHours, quantity);
         final Long PLATFORM_FEE_POINTS = 2L;
-        Long totalPointsRequired = pointsNeeded + PLATFORM_FEE_POINTS;
+        
+        // If pointsToUse is null, use full points (backward compatibility)
+        Long actualPointsToUse = pointsToUse != null ? Long.valueOf(pointsToUse) : fullPointsNeeded;
+        Long totalPointsRequired = actualPointsToUse + PLATFORM_FEE_POINTS;
         
         Long userPoints = pointsService.getUserPoints(userId);
         if (userPoints < totalPointsRequired) {
@@ -90,6 +113,19 @@ public class BookingService {
                 eventRepository.save(event);
             }
         }
+        
+        // IMPORTANT: Use totalAmount from frontend if provided to maintain consistency
+        // with what the user saw during booking. Fall back to calculation for backward compatibility.
+        double totalBookingAmount;
+        if (totalAmount != null && totalAmount > 0) {
+            totalBookingAmount = totalAmount;  // Use frontend-calculated amount
+        } else {
+            totalBookingAmount = fullPointsNeeded / (double)conversionRate;  // Fallback calculation
+        }
+        
+        // Remaining amount is what's paid via PayPal
+        java.math.BigDecimal remainingAmountBD = remainingAmount != null ? 
+            java.math.BigDecimal.valueOf(remainingAmount) : java.math.BigDecimal.ZERO;
 
         Booking bookingObj = Booking.builder()
                 .userId(userId)
@@ -99,16 +135,32 @@ public class BookingService {
                 .checkInTime(checkInTime != null ? java.time.LocalTime.parse(checkInTime) : null)
                 .checkOutTime(checkOutTime != null ? java.time.LocalTime.parse(checkOutTime) : null)
                 .durationHours(durationHours)
-                .quantity(quantity) // Use proper quantity field for event tickets
-                .totalAmount(java.math.BigDecimal.valueOf(pointsNeeded / (double)conversionRate))
-                .pointsUsed(pointsNeeded.intValue())
+                .quantity(quantity)
+                .totalAmount(java.math.BigDecimal.valueOf(totalBookingAmount))
+                .pointsUsed(actualPointsToUse.intValue())
+                .paypalTransactionId(paypalTransactionId)
+                .remainingAmount(remainingAmountBD)
                 .status("CONFIRMED")
                 .paymentStatus("COMPLETED")
                 .build();
+
+        
+        // Capture user name for display in vendor bookings
+        Optional<User> userOpt = userRepository.findById(userId);
+        if (userOpt.isPresent()) {
+            User user = userOpt.get();
+            String displayName = user.getFirstName() != null && !user.getFirstName().isEmpty() 
+                ? user.getFirstName() + (user.getLastName() != null ? " " + user.getLastName() : "")
+                : user.getUsername();
+            bookingObj.setUserName(displayName);
+        }
         
         bookingObj = bookingRepository.save(bookingObj);
 
-        pointsService.deductPoints(userId, pointsNeeded, "Booking payment", bookingObj.getId());
+        // Deduct points user wants to use (can be 0 if full PayPal payment)
+        if (actualPointsToUse > 0) {
+            pointsService.deductPoints(userId, actualPointsToUse, "Booking payment", bookingObj.getId());
+        }
         
         // Deduct 2 points platform fee
         if (userPoints >= totalPointsRequired) {
@@ -133,7 +185,7 @@ public class BookingService {
             Optional<Vendor> vendorOpt = vendorRepository.findById(vendorId);
             if (vendorOpt.isPresent()) {
                 Vendor vendor = vendorOpt.get();
-                vendor.setPoints((vendor.getPoints() != null ? vendor.getPoints() : 0L) + pointsNeeded);
+                vendor.setPoints((vendor.getPoints() != null ? vendor.getPoints() : 0L) + fullPointsNeeded);
                 vendorRepository.save(vendor);
             }
         }
@@ -170,9 +222,110 @@ public class BookingService {
     public Optional<Booking> getBookingById(Long id) {
         return bookingRepository.findById(id);
     }
+    
+    /**
+     * Get booking by ID with seat information enriched
+     */
+    public BookingDTO getBookingByIdWithSeatInfo(Long id) {
+        Optional<Booking> bookingOpt = bookingRepository.findById(id);
+        if (bookingOpt.isEmpty()) {
+            return null;
+        }
+        
+        Booking booking = bookingOpt.get();
+        
+        if (booking.getEventId() != null) {
+            // Priority 1: Check if this booking has associated seats in the EventSeat table (linked via FK)
+            List<EventSeat> seats = eventSeatRepository.findByBookingId(booking.getId());
+            
+            // Priority 2: Fallback to parsing seatIds JSON if no FK link found (supports legacy bookings)
+            if (seats.isEmpty() && booking.getSeatIds() != null && !booking.getSeatIds().isEmpty()) {
+                List<Long> seatIds = new ArrayList<>();
+                try {
+                    // Try JSON parsing first
+                    seatIds = objectMapper.readValue(booking.getSeatIds(), new TypeReference<List<Long>>(){});
+                } catch (Exception e) {
+                    log.warn("Failed to parse seat IDs as JSON for booking {}: {}, trying CSV", booking.getId(), e.getMessage());
+                    // Try simple CSV parsing as backup (handles "1,2,3" or "[1,2,3]")
+                    try {
+                        String cleaned = booking.getSeatIds().replaceAll("[\\[\\]\\s]", "");
+                        if (!cleaned.isEmpty()) {
+                            for (String part : cleaned.split(",")) {
+                                if (!part.isEmpty()) seatIds.add(Long.parseLong(part));
+                            }
+                        }
+                    } catch (Exception ex) {
+                        log.error("Failed to parse seat IDs as CSV for booking {}", booking.getId(), ex);
+                    }
+                }
+                
+                if (!seatIds.isEmpty()) {
+                    seats = eventSeatRepository.findAllById(seatIds);
+                }
+            }
+
+            if (!seats.isEmpty()) {
+                return BookingDTO.fromBookingWithSeats(booking, seats);
+            }
+        }
+        
+        return BookingDTO.fromBooking(booking);
+    }
 
     public List<Booking> getBookingsByUser(Long userId) {
         return bookingRepository.findByUserId(userId);
+    }
+    
+    /**
+     * Get user bookings with seat information enriched
+     */
+    public List<BookingDTO> getBookingsByUserWithSeatInfo(Long userId) {
+        List<Booking> bookings = bookingRepository.findByUserId(userId);
+        List<BookingDTO> dtos = new ArrayList<>();
+        
+        for (Booking booking : bookings) {
+            boolean isEventBooking = booking.getEventId() != null;
+            if (isEventBooking) {
+                // Priority 1: Check by FK
+                List<EventSeat> seats = eventSeatRepository.findByBookingId(booking.getId());
+                
+                // Priority 2: Fallback to parsing seatIds JSON
+                if (seats.isEmpty() && booking.getSeatIds() != null && !booking.getSeatIds().isEmpty()) {
+                    List<Long> seatIds = new ArrayList<>();
+                    try {
+                        // Try JSON parsing first
+                        seatIds = objectMapper.readValue(booking.getSeatIds(), new TypeReference<List<Long>>(){});
+                    } catch (Exception e) {
+                        log.warn("Failed to parse seat IDs as JSON for booking {}: {}, trying CSV", booking.getId(), e.getMessage());
+                        // Try simple CSV parsing as backup (handles "1,2,3" or "[1,2,3]")
+                        try {
+                            String cleaned = booking.getSeatIds().replaceAll("[\\[\\]\\s]", "");
+                            if (!cleaned.isEmpty()) {
+                                for (String part : cleaned.split(",")) {
+                                    if (!part.isEmpty()) seatIds.add(Long.parseLong(part));
+                                }
+                            }
+                        } catch (Exception ex) {
+                            log.error("Failed to parse seat IDs as CSV for booking {}", booking.getId(), ex);
+                        }
+                    }
+                    
+                    if (!seatIds.isEmpty()) {
+                        seats = eventSeatRepository.findAllById(seatIds);
+                    }
+                }
+
+                if (!seats.isEmpty()) {
+                    dtos.add(BookingDTO.fromBookingWithSeats(booking, seats));
+                    continue;
+                }
+            }
+            
+            // Fallback for non-seat bookings or if no seats found
+            dtos.add(BookingDTO.fromBooking(booking));
+        }
+        
+        return dtos;
     }
 
     public List<Booking> getBookingsByVenue(Long venueId) {
@@ -233,6 +386,9 @@ public class BookingService {
         
         Booking booking = bookingOptional.get();
         
+        // Get admin-set conversion rate for points calculation
+        int conversionRate = adminService.getConversionRate().getPointsPerDollar();
+        
         // Calculate refund based on cancellation policy
         CancellationResult result = calculateRefund(booking);
         
@@ -243,47 +399,61 @@ public class BookingService {
         booking.setRefundPercentage(result.refundPercentage);
         bookingRepository.save(booking);
         
-        if (booking.getPointsUsed() > 0) {
-            // Calculate points to refund based on same percentage as money refund
-            Long pointsToRefund = Math.round(booking.getPointsUsed() * result.refundPercentage / 100.0);
-            
-            if (pointsToRefund > 0) {
-                pointsService.refundPoints(
-                    booking.getUserId(), 
-                    pointsToRefund, 
-                    String.format("Booking cancelled - %d%% points refunded", result.refundPercentage), 
-                    booking.getId()
-                );
-            }
-            
-            // Deduct points from vendor (they received these points when booking was created)
-            // Deduct the same proportion
-            Long vendorId = null;
-            if (booking.getVenueId() != null) {
-                Optional<Venue> venueOpt = venueRepository.findById(booking.getVenueId());
-                if (venueOpt.isPresent()) {
-                    vendorId = venueOpt.get().getVendorId();
-                }
-            } else if (booking.getEventId() != null) {
-                Optional<Event> eventOpt = eventRepository.findById(booking.getEventId());
-                if (eventOpt.isPresent()) {
-                    vendorId = eventOpt.get().getVendorId();
-                }
-            }
-            
-            if (vendorId != null && pointsToRefund > 0) {
-                Optional<Vendor> vendorOpt = vendorRepository.findById(vendorId);
-                if (vendorOpt.isPresent()) {
-                    Vendor vendor = vendorOpt.get();
-                    Long currentPoints = vendor.getPoints() != null ? vendor.getPoints() : 0L;
-                    // Ensure vendor points don't go negative
-                    vendor.setPoints(Math.max(0L, currentPoints - pointsToRefund));
-                    vendorRepository.save(vendor);
-                }
-            }
-            
-            // Store points refunded in result
+        // ==========================================
+        // NEW REFUND LOGIC FOR HYBRID PAYMENTS:
+        // Refund percentage of TOTAL booking amount as POINTS
+        // NO money refund at all
+        // ==========================================
+        // Example: Booking ₹100 (paid with 50 points + ₹50 cash)
+        // Cancel within 2 days (75% refund):
+        // - Refund = 75% of ₹100 = ₹75 worth of points
+        // - Points to refund = ₹75 × conversionRate = 75 points (if rate = 1)
+        // - NO PayPal/cash refund
+        
+        BigDecimal totalBookingAmount = booking.getTotalAmount();
+        BigDecimal refundValueInRupees = totalBookingAmount
+            .multiply(new BigDecimal(result.refundPercentage))
+            .divide(new BigDecimal(100), 2, RoundingMode.HALF_UP);
+        
+        // Convert rupee refund value to points using admin conversion rate
+        Long pointsToRefund = Math.round(refundValueInRupees.doubleValue() * conversionRate);
+        
+        if (pointsToRefund > 0) {
+            pointsService.refundPoints(
+                booking.getUserId(), 
+                pointsToRefund, 
+                String.format("Booking cancelled - %d%% refund (₹%.2f = %d points)", 
+                    result.refundPercentage, refundValueInRupees.doubleValue(), pointsToRefund), 
+                booking.getId()
+            );
             result.pointsRefunded = pointsToRefund.intValue();
+            log.info("[REFUND] Booking {} cancelled. Refunded {} points ({}% of ₹{} total)", 
+                booking.getId(), pointsToRefund, result.refundPercentage, totalBookingAmount);
+        }
+        
+        // Deduct points from vendor (they received points when booking was created)
+        Long vendorId = null;
+        if (booking.getVenueId() != null) {
+            Optional<Venue> venueOpt = venueRepository.findById(booking.getVenueId());
+            if (venueOpt.isPresent()) {
+                vendorId = venueOpt.get().getVendorId();
+            }
+        } else if (booking.getEventId() != null) {
+            Optional<Event> eventOpt = eventRepository.findById(booking.getEventId());
+            if (eventOpt.isPresent()) {
+                vendorId = eventOpt.get().getVendorId();
+            }
+        }
+        
+        if (vendorId != null && pointsToRefund > 0) {
+            Optional<Vendor> vendorOpt = vendorRepository.findById(vendorId);
+            if (vendorOpt.isPresent()) {
+                Vendor vendor = vendorOpt.get();
+                Long currentPoints = vendor.getPoints() != null ? vendor.getPoints() : 0L;
+                // Ensure vendor points don't go negative
+                vendor.setPoints(Math.max(0L, currentPoints - pointsToRefund));
+                vendorRepository.save(vendor);
+            }
         }
 
         if (booking.getEventId() != null) {
@@ -295,13 +465,22 @@ public class BookingService {
                                  (booking.getDurationHours() != null ? booking.getDurationHours() : 1);
                 event.setTicketsAvailable(event.getTicketsAvailable() + quantity);
                 eventRepository.save(event);
+                
+                // Release seats for seat-selection events
+                if ("SEAT_SELECTION".equals(event.getBookingType()) && booking.getSeatIds() != null) {
+                    seatService.releaseSeats(booking.getId());
+                    log.info("Released seats for cancelled seat booking {}", booking.getId());
+                }
             }
         }
         
+        // Send cancellation email with refund details
+        sendBookingCancellationEmail(booking, result);
+        
         // Audit log the cancellation
         auditLogService.log("BOOKING_CANCELLED", "BOOKING", booking.getId(), 
-            String.format("Booking cancelled. Refund: %d%% ($%.2f)", 
-                result.refundPercentage, result.refundAmount.doubleValue()));
+            String.format("Booking cancelled. Refund: %d%% (%d points, NO money refund)", 
+                result.refundPercentage, result.pointsRefunded));
         
         return result;
     }
@@ -434,14 +613,23 @@ public class BookingService {
      */
     private void sendBookingConfirmationEmail(Booking booking) {
         try {
-            // Get user information - skipping for now since UserService method doesn't exist
-            // TODO: Fix after UserService is updated
-            String userEmail = "user@example.com"; // Placeholder
-            String userName = "User"; // Placeholder
+            // Get user information from database
+            Optional<User> userOpt = userRepository.findById(booking.getUserId());
+            if (userOpt.isEmpty()) {
+                log.warn("Cannot send booking confirmation email - user {} not found", booking.getUserId());
+                return;
+            }
             
-            // Get points earned (5% of totalAmount as points)
+            User user = userOpt.get();
+            String userEmail = user.getEmail();
+            String userName = user.getFirstName() != null ? user.getFirstName() : user.getUsername();
+            
+            // Get conversion rate and calculate points earned (5% of totalAmount as points)
             int conversionRate = adminService.getConversionRate().getPointsPerDollar();
             int pointsEarned = (int) Math.round(booking.getTotalAmount().doubleValue() * conversionRate * 0.05);
+            int pointsUsed = booking.getPointsUsed() != null ? booking.getPointsUsed() : 0;
+            double pointsValue = pointsUsed / (double) conversionRate;
+            double cashPaid = booking.getRemainingAmount() != null ? booking.getRemainingAmount().doubleValue() : 0;
             
             // Send email based on booking type
             if (booking.getEventId() != null) {
@@ -449,42 +637,123 @@ public class BookingService {
                 Optional<Event> eventOpt = eventRepository.findById(booking.getEventId());
                 if (eventOpt.isPresent()) {
                     Event event = eventOpt.get();
-                    emailService.sendEventBookingConfirmation(
+                    emailService.sendBookingConfirmationInvoice(
                         userEmail,
                         userName,
                         booking.getId(),
                         event.getName(),
+                        "EVENT",
                         event.getEventDate().toString(),
                         event.getEventTime() != null ? event.getEventTime().toString() : "TBA",
                         event.getLocation(),
                         booking.getQuantity() != null ? booking.getQuantity() : 1,
                         booking.getTotalAmount().doubleValue(),
-                        pointsEarned
+                        pointsUsed,
+                        pointsValue,
+                        cashPaid,
+                        2, // Platform fee
+                        booking.getTotalAmount().doubleValue(),
+                        pointsEarned,
+                        conversionRate
                     );
-                    System.out.println("[EMAIL] Sent event booking confirmation to: " + userEmail);
+                    log.info("[EMAIL] Sent event booking invoice to: {}", userEmail);
                 }
             } else if (booking.getVenueId() != null) {
                 // Venue booking
                 Optional<Venue> venueOpt = venueRepository.findById(booking.getVenueId());
                 if (venueOpt.isPresent()) {
                     Venue venue = venueOpt.get();
-                    emailService.sendVenueBookingConfirmation(
+                    String checkInTime = booking.getCheckInTime() != null ? booking.getCheckInTime().toString() : "TBA";
+                    emailService.sendBookingConfirmationInvoice(
                         userEmail,
                         userName,
                         booking.getId(),
-                       venue.getName(),
+                        venue.getName(),
+                        "VENUE",
                         booking.getBookingDate().toString(),
-                        venue.getAddress(),  // Changed from getLocation() to getAddress()
-                        venue.getCapacity(),
+                        checkInTime,
+                        venue.getAddress(),
+                        booking.getDurationHours() != null ? booking.getDurationHours() : 1,
                         booking.getTotalAmount().doubleValue(),
-                        pointsEarned
+                        pointsUsed,
+                        pointsValue,
+                        cashPaid,
+                        2, // Platform fee
+                        booking.getTotalAmount().doubleValue(),
+                        pointsEarned,
+                        conversionRate
                     );
-                    System.out.println("[EMAIL] Sent venue booking confirmation to: " + userEmail);
+                    log.info("[EMAIL] Sent venue booking invoice to: {}", userEmail);
                 }
             }
         } catch (Exception e) {
-            System.err.println("[EMAIL] Failed to send booking confirmation email for booking " + booking.getId() + ": " + e.getMessage());
+            log.error("[EMAIL] Failed to send booking confirmation for booking {}: {}", booking.getId(), e.getMessage());
+            e.printStackTrace();
             // Don't fail the booking if email fails
+        }
+    }
+    
+    /**
+     * Send booking cancellation email with refund details (invoice style)
+     */
+    private void sendBookingCancellationEmail(Booking booking, CancellationResult result) {
+        try {
+            // Get user information
+            Optional<User> userOpt = userRepository.findById(booking.getUserId());
+            if (userOpt.isEmpty()) {
+                log.warn("Cannot send cancellation email - user {} not found", booking.getUserId());
+                return;
+            }
+            
+            User user = userOpt.get();
+            String userEmail = user.getEmail();
+            String userName = user.getFirstName() != null ? user.getFirstName() : user.getUsername();
+            
+            // Get booking item name
+            String itemName = "Booking";
+            String itemType = "VENUE";
+            String bookingDate = booking.getBookingDate() != null ? booking.getBookingDate().toString() : "";
+            
+            if (booking.getEventId() != null) {
+                Optional<Event> eventOpt = eventRepository.findById(booking.getEventId());
+                if (eventOpt.isPresent()) {
+                    itemName = eventOpt.get().getName();
+                    itemType = "EVENT";
+                    if (eventOpt.get().getEventDate() != null) {
+                        bookingDate = eventOpt.get().getEventDate().toString();
+                    }
+                }
+            } else if (booking.getVenueId() != null) {
+                Optional<Venue> venueOpt = venueRepository.findById(booking.getVenueId());
+                if (venueOpt.isPresent()) {
+                    itemName = venueOpt.get().getName();
+                }
+            }
+            
+            // Get conversion rate
+            int conversionRate = adminService.getConversionRate().getPointsPerDollar();
+            
+            // Send cancellation email
+            emailService.sendBookingCancellationInvoice(
+                userEmail,
+                userName,
+                booking.getId(),
+                itemName,
+                itemType,
+                bookingDate,
+                booking.getTotalAmount().doubleValue(),
+                booking.getPointsUsed() != null ? booking.getPointsUsed() : 0,
+                booking.getRemainingAmount() != null ? booking.getRemainingAmount().doubleValue() : 0,
+                result.refundPercentage,
+                result.pointsRefunded,
+                result.message,
+                conversionRate
+            );
+            
+            System.out.println("[EMAIL] Sent booking cancellation email to: " + userEmail);
+        } catch (Exception e) {
+            System.err.println("[EMAIL] Failed to send cancellation email for booking " + booking.getId() + ": " + e.getMessage());
+            e.printStackTrace();
         }
     }
 }

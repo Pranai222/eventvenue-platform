@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
@@ -44,6 +44,10 @@ export function RequestCreditsModal({ isOpen, onClose, userId, onSuccess }: Requ
                 userId,
                 pointsRequested: points,
                 reason: reason.trim()
+            }, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+                }
             })
 
             if (response.data.success) {
@@ -55,9 +59,16 @@ export function RequestCreditsModal({ isOpen, onClose, userId, onSuccess }: Requ
                     setReason('')
                     setIsSuccess(false)
                 }, 2000)
+            } else {
+                setError(response.data.error || response.data.message || 'Failed to submit request')
             }
         } catch (err: any) {
-            setError(err.response?.data?.error || 'Failed to submit request')
+            console.error('[CreditRequest] Error:', err)
+            const errorMessage = err.response?.data?.error ||
+                err.response?.data?.message ||
+                err.message ||
+                'Failed to submit request. Please try again.'
+            setError(errorMessage)
         } finally {
             setIsLoading(false)
         }

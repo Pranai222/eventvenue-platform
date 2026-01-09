@@ -77,6 +77,28 @@ public class VenueController {
         }
     }
 
+    @GetMapping("/{id}/check-availability")
+    public ResponseEntity<ApiResponse> checkAvailability(
+            @PathVariable Long id,
+            @RequestParam String date) {
+        try {
+            java.time.LocalDate bookingDate = java.time.LocalDate.parse(date);
+            boolean isAvailable = venueService.checkAvailability(id, bookingDate);
+            
+            return ResponseEntity.ok(ApiResponse.builder()
+                    .success(true)
+                    .message(isAvailable ? "Venue is available" : "Venue is not available for this date")
+                    .data(java.util.Map.of("available", isAvailable))
+                    .build());
+        } catch (Exception e) {
+            System.out.println("[pranai] Error checking availability: " + e.getMessage());
+            return ResponseEntity.badRequest().body(ApiResponse.builder()
+                    .success(false)
+                    .message(e.getMessage())
+                    .build());
+        }
+    }
+
     @GetMapping("/filter")
     public ResponseEntity<ApiResponse> filterVenues(
             @RequestParam(required = false) String city,
@@ -152,10 +174,14 @@ public class VenueController {
                         .build());
             }
 
+            // Get venue with vendor info for user display
+            Venue venue = venueOptional.get();
+            com.eventvenue.dto.VenueDTO venueDTO = venueService.getVenueWithVendorInfo(venue);
+
             return ResponseEntity.ok(ApiResponse.builder()
                     .success(true)
                     .message("Venue retrieved successfully")
-                    .data(venueOptional.get())
+                    .data(venueDTO)
                     .build());
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(ApiResponse.builder()

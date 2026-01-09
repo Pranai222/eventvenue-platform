@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import type React from "react"
 import { useState } from "react"
@@ -9,14 +9,15 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { AlertCircle, AlertTriangle } from "lucide-react"
+import { AlertCircle, AlertTriangle, ArrowLeft } from "lucide-react"
 
 interface OtpVerificationFormProps {
   email: string
   role?: "USER" | "VENDOR"
+  onBack?: () => void
 }
 
-export function OtpVerificationForm({ email, role = "USER" }: OtpVerificationFormProps) {
+export function OtpVerificationForm({ email, role = "USER", onBack }: OtpVerificationFormProps) {
   const { login } = useAuth()
   const router = useRouter()
   const [otp, setOtp] = useState("")
@@ -24,6 +25,14 @@ export function OtpVerificationForm({ email, role = "USER" }: OtpVerificationFor
   const [isLoading, setIsLoading] = useState(false)
   const [isResending, setIsResending] = useState(false)
   const [isVendorWaiting, setIsVendorWaiting] = useState(false)
+
+  const handleBack = () => {
+    if (onBack) {
+      onBack()
+    } else {
+      router.push(`/signup?role=${role.toLowerCase()}`)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -129,6 +138,17 @@ export function OtpVerificationForm({ email, role = "USER" }: OtpVerificationFor
 
   return (
     <div className="space-y-4">
+      {/* Back Button */}
+      <Button
+        type="button"
+        variant="ghost"
+        onClick={handleBack}
+        className="gap-2 text-muted-foreground hover:text-foreground"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Back to Signup
+      </Button>
+
       <div className="text-center space-y-2">
         <h2 className="text-2xl font-semibold">Verify Your Email</h2>
         <p className="text-muted-foreground text-sm">
@@ -172,3 +192,4 @@ export function OtpVerificationForm({ email, role = "USER" }: OtpVerificationFor
     </div>
   )
 }
+

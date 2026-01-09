@@ -56,10 +56,14 @@ public class EventController {
                         .build());
             }
 
+            // Get event with vendor info for user display
+            Event event = eventOptional.get();
+            com.eventvenue.dto.EventDTO eventDTO = eventService.getEventWithVendorInfo(event);
+
             return ResponseEntity.ok(ApiResponse.builder()
                     .success(true)
                     .message("Event retrieved successfully")
-                    .data(eventOptional.get())
+                    .data(eventDTO)
                     .build());
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(ApiResponse.builder()

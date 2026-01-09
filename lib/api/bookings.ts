@@ -4,18 +4,23 @@ import type { Booking } from "@/lib/types/booking"
 export interface BookingData {
   id: number
   userId: number
+  userName?: string
   venueId?: number
   eventId?: number
   bookingDate: string
   checkInTime?: string
   checkOutTime?: string
   durationHours?: number
+  quantity?: number
   totalAmount: number
   pointsUsed: number
   status: string
   paymentStatus: string
   createdAt?: string
   updatedAt?: string
+  // Seat info for seat-selection events
+  seatLabels?: string
+  seatCount?: number
 }
 
 export interface BookingCostResponse {
@@ -28,6 +33,7 @@ export interface BookingCostResponse {
 const convertToBooking = (data: BookingData): Booking => ({
   id: data.id,
   userId: data.userId,
+  userName: data.userName,
   venueId: data.venueId,
   eventId: data.eventId,
   bookingDate: data.bookingDate,
@@ -36,12 +42,16 @@ const convertToBooking = (data: BookingData): Booking => ({
   checkInTime: data.checkInTime,
   checkOutTime: data.checkOutTime,
   durationHours: data.durationHours,
+  quantity: data.quantity,
   totalAmount: data.totalAmount,
   pointsUsed: data.pointsUsed,
   status: data.status as "PENDING" | "CONFIRMED" | "CANCELLED" | "COMPLETED",
   paymentStatus: data.paymentStatus,
   createdAt: data.createdAt || new Date().toISOString(),
   updatedAt: data.updatedAt,
+  // Include seat info for seat-selection events
+  seatLabels: data.seatLabels,
+  seatCount: data.seatCount,
 })
 
 const convertToBookingData = (data: any): Partial<BookingData> => {
@@ -143,7 +153,9 @@ export const bookingsApi = {
     const bookingData = convertToBookingData(data)
     const payload = {
       ...bookingData,
-      pointsToUse: data.pointsToUse || 0
+      pointsToUse: data.pointsToUse || 0,
+      paypalTransactionId: data.paypalTransactionId || null,
+      remainingAmount: data.remainingAmount || 0
     }
     const response = await apiClient.post<BookingData>("/api/bookings/with-points", payload)
     return convertToBooking(response as BookingData)

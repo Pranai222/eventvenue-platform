@@ -128,7 +128,7 @@ public class EmailService {
             </p>
             
             <p style="color: #999; font-size: 13px; margin-top: 20px;">
-                Need help? Contact us at <a href="mailto:support@eventvenue.com">support@eventvenue.com</a>
+                Need help? Contact us at <a href="mailto:pranaib20@gmail.com">pranaib20@gmail.com</a>
             </p>
         </div>
         
@@ -159,6 +159,30 @@ public class EmailService {
         helper.setText(htmlContent, true); // true = HTML
         
         mailSender.send(message);
+    }
+
+    /**
+     * Send simple text email (public method)
+     */
+    @Async
+    public void sendSimpleEmail(String to, String subject, String textContent) {
+        try {
+            // Convert plain text to simple HTML with line breaks
+            String htmlContent = "<html><body style='font-family: Arial, sans-serif; line-height: 1.6;'>" +
+                    "<div style='max-width: 600px; margin: 0 auto; padding: 20px;'>" +
+                    textContent.replace("\n", "<br>") +
+                    "</div></body></html>";
+            sendHtmlEmail(to, subject, htmlContent);
+            log.info("Simple email sent to: {}", to);
+        } catch (Exception e) {
+            log.error("Failed to send simple email to: {}", to, e);
+            // Console fallback for development
+            System.out.println("========================================");
+            System.out.println("EMAIL: " + subject);
+            System.out.println("To: " + to);
+            System.out.println("Content: " + textContent);
+            System.out.println("========================================");
+        }
     }
 
     // Keep existing methods for compatibility
@@ -337,7 +361,7 @@ public class EmailService {
             </div>
             
             <p style="color: #999; font-size: 12px; margin-top: 30px;">
-                Need help? Contact us at <a href="mailto:support@eventvenue.com">support@eventvenue.com</a>
+                Need help? Contact us at <a href="mailto:pranaib20@gmail.com">pranaib20@gmail.com</a>
             </p>
         </div>
         
@@ -433,7 +457,7 @@ public class EmailService {
             </p>
             
             <p style="color: #999; font-size: 12px; margin-top: 30px;">
-                Questions? Reach out to us at <a href="mailto:support@eventvenue.com">support@eventvenue.com</a>
+                Questions? Reach out to us at <a href="mailto:pranaib20@gmail.com">pranaib20@gmail.com</a>
             </p>
         </div>
         
@@ -684,7 +708,7 @@ public class EmailService {
             </div>
             
             <p style="color: #999; font-size: 12px; margin-top: 30px;">
-                Need help? Contact us at <a href="mailto:support@eventvenue.com">support@eventvenue.com</a>
+                Need help? Contact us at <a href="mailto:pranaib20@gmail.com">pranaib20@gmail.com</a>
             </p>
         </div>
         
@@ -763,7 +787,7 @@ public class EmailService {
             </div>
             
             <p style="color: #999; font-size: 12px; margin-top: 30px;">
-                Need help? Contact us at <a href="mailto:support@eventvenue.com">support@eventvenue.com</a>
+                Need help? Contact us at <a href="mailto:pranaib20@gmail.com">pranaib20@gmail.com</a>
             </p>
         </div>
         
@@ -775,5 +799,715 @@ public class EmailService {
 </html>
 """.formatted(userName, eventName, reason, pointsRefunded, appUrl, appName);
     }
+    
+    /**
+     * Send vendor email verification success notification
+     * Called when vendor verifies their email via OTP
+     */
+    @Async
+    public void sendVendorVerificationSuccess(String toEmail, String businessName) {
+        try {
+            String subject = "🎉 Email Verified Successfully - " + appName;
+            String htmlContent = buildVendorVerificationSuccessTemplate(businessName);
+            
+            sendHtmlEmail(toEmail, subject, htmlContent);
+            log.info("Vendor verification success email sent to: {}", toEmail);
+        } catch (Exception e) {
+            log.error("Failed to send vendor verification email to: {}", toEmail, e);
+            System.out.println("[EMAIL] Vendor Verification Success - " + businessName + " (" + toEmail + ")");
+        }
+    }
+    
+    /**
+     * Send vendor approval notification with login link
+     * Called when admin approves vendor application
+     */
+    @Async
+    public void sendVendorApprovalEmail(String toEmail, String businessName) {
+        try {
+            String subject = "✅ Congratulations! Your Vendor Application is Approved - " + appName;
+            String htmlContent = buildVendorApprovalTemplate(businessName);
+            
+            sendHtmlEmail(toEmail, subject, htmlContent);
+            log.info("Vendor approval email sent to: {}", toEmail);
+        } catch (Exception e) {
+            log.error("Failed to send vendor approval email to: {}", toEmail, e);
+            System.out.println("[EMAIL] Vendor Approved - " + businessName + " (" + toEmail + ")");
+        }
+    }
+    
+    /**
+     * Send vendor rejection notification with reason
+     * Called when admin rejects vendor application
+     */
+    @Async
+    public void sendVendorRejectionEmail(String toEmail, String businessName, String reason) {
+        try {
+            String subject = "Vendor Application Update - " + appName;
+            String htmlContent = buildVendorRejectionTemplate(businessName, reason);
+            
+            sendHtmlEmail(toEmail, subject, htmlContent);
+            log.info("Vendor rejection email sent to: {}", toEmail);
+        } catch (Exception e) {
+            log.error("Failed to send vendor rejection email to: {}", toEmail, e);
+            System.out.println("[EMAIL] Vendor Rejected - " + businessName + " (" + toEmail + ") Reason: " + reason);
+        }
+    }
+    
+    /**
+     * Build vendor verification success email template
+     */
+    private String buildVendorVerificationSuccessTemplate(String businessName) {
+        return """
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f4f4f4; }
+        .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; }
+        .header { background: linear-gradient(135deg, #10b981 0%%, #059669 100%%); padding: 40px 20px; text-align: center; }
+        .header h1 { color: #ffffff; margin: 0; font-size: 28px; }
+        .success-icon { font-size: 60px; margin-bottom: 10px; }
+        .content { padding: 40px 30px; }
+        .status-box { background: #dcfce7; border-radius: 12px; padding: 25px; margin: 20px 0; text-align: center; border: 2px solid #22c55e; }
+        .status-title { font-size: 20px; font-weight: bold; color: #166534; margin-bottom: 10px; }
+        .status-desc { color: #15803d; }
+        .next-steps { background: #f0f9ff; border-radius: 12px; padding: 25px; margin: 20px 0; }
+        .next-steps h3 { color: #0369a1; margin-top: 0; }
+        .step { display: flex; align-items: flex-start; margin: 15px 0; }
+        .step-num { background: #3b82f6; color: white; width: 28px; height: 28px; border-radius: 50%%; display: flex; align-items: center; justify-content: center; font-weight: bold; margin-right: 15px; flex-shrink: 0; }
+        .step-text { color: #1e40af; }
+        .footer { background: #f8f9fa; padding: 20px; text-align: center; color: #666; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="success-icon">✅</div>
+            <h1>Email Verified!</h1>
+        </div>
+        
+        <div class="content">
+            <p style="font-size: 18px; color: #333;">Hello <strong>%s</strong>,</p>
+            
+            <div class="status-box">
+                <div class="status-title">🎉 Your email has been verified successfully!</div>
+                <div class="status-desc">
+                    Your vendor account is now under review by our admin team.
+                </div>
+            </div>
+            
+            <div class="next-steps">
+                <h3>📋 What happens next?</h3>
+                <div class="step">
+                    <div class="step-num">1</div>
+                    <div class="step-text"><strong>Admin Review:</strong> Our team will review your business details within 24-48 hours.</div>
+                </div>
+                <div class="step">
+                    <div class="step-num">2</div>
+                    <div class="step-text"><strong>Approval Notification:</strong> You'll receive an email once your account is approved.</div>
+                </div>
+                <div class="step">
+                    <div class="step-num">3</div>
+                    <div class="step-text"><strong>Start Earning:</strong> List your venues and events to start earning!</div>
+                </div>
+            </div>
+            
+            <p style="color: #333; font-size: 14px; margin-top: 20px;">
+                While you wait, you can explore our platform and prepare your venue/event details.
+            </p>
+            
+            <p style="color: #999; font-size: 12px; margin-top: 30px;">
+                Questions? Contact us at <a href="mailto:pranaib20@gmail.com">pranaib20@gmail.com</a>
+            </p>
+        </div>
+        
+        <div class="footer">
+            <p>© 2025 %s. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>
+""".formatted(businessName, appName);
+    }
+    
+    /**
+     * Build vendor approval email template with login link
+     */
+    private String buildVendorApprovalTemplate(String businessName) {
+        String vendorLoginUrl = appUrl + "/login?role=vendor";
+        String vendorDashboardUrl = appUrl + "/vendor/dashboard";
+        
+        return """
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f4f4f4; }
+        .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; }
+        .header { background: linear-gradient(135deg, #8b5cf6 0%%, #6d28d9 100%%); padding: 50px 20px; text-align: center; }
+        .header h1 { color: #ffffff; margin: 0; font-size: 32px; }
+        .confetti { font-size: 50px; margin-bottom: 10px; }
+        .congrats-badge { background: #fbbf24; color: #78350f; padding: 12px 24px; border-radius: 25px; display: inline-block; margin-top: 15px; font-weight: bold; font-size: 14px; }
+        .content { padding: 40px 30px; }
+        .welcome-text { font-size: 18px; color: #333; line-height: 1.6; }
+        .points-box { background: linear-gradient(135deg, #fef3c7 0%%, #fde68a 100%%); border-radius: 12px; padding: 25px; margin: 25px 0; text-align: center; border: 2px solid #f59e0b; }
+        .points-title { color: #92400e; font-size: 16px; margin-bottom: 5px; }
+        .points-amount { font-size: 48px; font-weight: bold; color: #d97706; }
+        .points-label { color: #b45309; font-size: 14px; }
+        .features-grid { display: grid; gap: 15px; margin: 25px 0; }
+        .feature { background: #f8fafc; border-radius: 10px; padding: 20px; border-left: 4px solid #8b5cf6; }
+        .feature-icon { font-size: 24px; margin-bottom: 8px; }
+        .feature-title { color: #1f2937; font-weight: bold; margin-bottom: 5px; }
+        .feature-desc { color: #6b7280; font-size: 14px; }
+        .login-section { background: #8b5cf6; border-radius: 12px; padding: 30px; margin: 30px 0; text-align: center; }
+        .login-title { color: #ffffff; font-size: 18px; margin-bottom: 20px; }
+        .login-button { background: #ffffff; color: #8b5cf6; padding: 18px 40px; text-decoration: none; border-radius: 10px; display: inline-block; font-weight: bold; font-size: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+        .login-url { color: #c4b5fd; font-size: 12px; margin-top: 15px; word-break: break-all; }
+        .footer { background: #f8f9fa; padding: 25px; text-align: center; color: #666; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="confetti">🎊</div>
+            <h1>Congratulations!</h1>
+            <div class="congrats-badge">✓ VENDOR APPROVED</div>
+        </div>
+        
+        <div class="content">
+            <p class="welcome-text">
+                Hello <strong>%s</strong>,
+            </p>
+            
+            <p class="welcome-text">
+                Great news! 🎉 Your vendor application has been <strong>approved</strong> by our team. 
+                You can now start listing your venues and events on our platform!
+            </p>
+            
+            <div class="points-box">
+                <div class="points-title">🎁 Welcome Bonus</div>
+                <div class="points-amount">200</div>
+                <div class="points-label">Points Added to Your Account!</div>
+            </div>
+            
+            <div class="features-grid">
+                <div class="feature">
+                    <div class="feature-icon">🏢</div>
+                    <div class="feature-title">List Your Venues</div>
+                    <div class="feature-desc">Add your venue with photos, amenities, and pricing</div>
+                </div>
+                <div class="feature">
+                    <div class="feature-icon">🎪</div>
+                    <div class="feature-title">Create Events</div>
+                    <div class="feature-desc">Host events with ticket booking or seat selection</div>
+                </div>
+                <div class="feature">
+                    <div class="feature-icon">💰</div>
+                    <div class="feature-title">Earn Money</div>
+                    <div class="feature-desc">Get paid directly through our secure payment system</div>
+                </div>
+                <div class="feature">
+                    <div class="feature-icon">📊</div>
+                    <div class="feature-title">Track Analytics</div>
+                    <div class="feature-desc">View bookings, earnings, and performance insights</div>
+                </div>
+            </div>
+            
+            <div class="login-section">
+                <div class="login-title">Ready to get started? Login to your Vendor Dashboard!</div>
+                <a href="%s" class="login-button">🚀 Login as Vendor</a>
+                <div class="login-url">%s</div>
+            </div>
+            
+            <p style="color: #333; font-size: 14px;">
+                <strong>Quick Start Guide:</strong><br>
+                1. Login with your email and password<br>
+                2. Complete your business profile<br>
+                3. Add your first venue or event<br>
+                4. Start accepting bookings!
+            </p>
+            
+            <p style="color: #999; font-size: 12px; margin-top: 30px;">
+                Need help getting started? Contact us at <a href="mailto:pranaib20@gmail.com">pranaib20@gmail.com</a>
+            </p>
+        </div>
+        
+        <div class="footer">
+            <p>© 2025 %s. All rights reserved.</p>
+            <p style="margin-top: 10px;">
+                <a href="%s" style="color: #8b5cf6; text-decoration: none;">Vendor Dashboard</a> | 
+                <a href="%s/help" style="color: #8b5cf6; text-decoration: none;">Help Center</a>
+            </p>
+        </div>
+    </div>
+</body>
+</html>
+""".formatted(businessName, vendorLoginUrl, vendorLoginUrl, appName, vendorDashboardUrl, appUrl);
+    }
+    
+    /**
+     * Build vendor rejection email template
+     */
+    private String buildVendorRejectionTemplate(String businessName, String reason) {
+        return """
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f4f4f4; }
+        .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; }
+        .header { background: linear-gradient(135deg, #64748b 0%%, #475569 100%%); padding: 40px 20px; text-align: center; }
+        .header h1 { color: #ffffff; margin: 0; font-size: 28px; }
+        .content { padding: 40px 30px; }
+        .reason-box { background: #fef2f2; border-left: 4px solid #ef4444; padding: 20px; margin: 25px 0; border-radius: 0 8px 8px 0; }
+        .reason-title { color: #991b1b; font-weight: bold; margin-bottom: 10px; }
+        .reason-text { color: #7f1d1d; }
+        .help-box { background: #f0f9ff; border-radius: 12px; padding: 25px; margin: 25px 0; }
+        .help-title { color: #0369a1; font-weight: bold; margin-bottom: 15px; }
+        .help-text { color: #0c4a6e; font-size: 14px; line-height: 1.8; }
+        .footer { background: #f8f9fa; padding: 20px; text-align: center; color: #666; font-size: 12px; }
+        .button { background: #3b82f6; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; display: inline-block; margin: 20px 0; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Application Update</h1>
+        </div>
+        
+        <div class="content">
+            <p style="font-size: 16px; color: #333;">Hello <strong>%s</strong>,</p>
+            
+            <p style="font-size: 16px; color: #333;">
+                Thank you for your interest in becoming a vendor on our platform. After careful review, 
+                we regret to inform you that your application was not approved at this time.
+            </p>
+            
+            <div class="reason-box">
+                <div class="reason-title">📋 Reason:</div>
+                <div class="reason-text">%s</div>
+            </div>
+            
+            <div class="help-box">
+                <div class="help-title">💡 What can you do?</div>
+                <div class="help-text">
+                    • Review the reason above and address any issues<br>
+                    • Update your business information if needed<br>
+                    • Contact our support team for clarification<br>
+                    • You may reapply with updated information
+                </div>
+            </div>
+            
+            <p style="color: #333; font-size: 14px;">
+                We appreciate your understanding and encourage you to reach out if you have any questions 
+                or would like to discuss your application further.
+            </p>
+            
+            <div style="text-align: center;">
+                <a href="mailto:pranaib20@gmail.com" class="button">Contact Support</a>
+            </div>
+            
+            <p style="color: #999; font-size: 12px; margin-top: 30px;">
+                Email: <a href="mailto:pranaib20@gmail.com">pranaib20@gmail.com</a>
+            </p>
+        </div>
+        
+        <div class="footer">
+            <p>© 2025 %s. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>
+""".formatted(businessName, reason, appName);
+    }
+    
+    /**
+     * Send booking cancellation email with invoice-style refund breakdown
+     */
+    @Async
+    public void sendBookingCancellationInvoice(
+            String toEmail,
+            String userName,
+            Long bookingId,
+            String itemName,
+            String itemType,
+            String bookingDate,
+            double originalAmount,
+            int pointsUsed,
+            double cashPaid,
+            int refundPercentage,
+            int pointsRefunded,
+            String cancellationReason,
+            int conversionRate
+    ) {
+        try {
+            String subject = "❌ Booking Cancelled - Invoice #" + bookingId;
+            String htmlContent = buildCancellationInvoiceTemplate(
+                userName, bookingId, itemName, itemType, bookingDate,
+                originalAmount, pointsUsed, cashPaid, refundPercentage, 
+                pointsRefunded, cancellationReason, conversionRate
+            );
+            
+            sendHtmlEmail(toEmail, subject, htmlContent);
+            log.info("Booking cancellation invoice sent to: {}", toEmail);
+        } catch (Exception e) {
+            log.error("Failed to send cancellation invoice to: {}", toEmail, e);
+        }
+    }
+    
+    /**
+     * Build beautiful industrial invoice template for booking cancellation
+     */
+    private String buildCancellationInvoiceTemplate(
+            String userName, Long bookingId, String itemName, String itemType,
+            String bookingDate, double originalAmount, int pointsUsed, double cashPaid,
+            int refundPercentage, int pointsRefunded, String cancellationReason, int conversionRate
+    ) {
+        double pointsValue = pointsUsed / (double) conversionRate;
+        String itemIcon = itemType.equals("EVENT") ? "🎪" : "🏢";
+        String refundMessage = refundPercentage == 100 ? 
+            "Full refund - Cancelled 2+ days in advance" :
+            (refundPercentage == 75 ? "75% refund - Cancelled within 2 days" : 
+             (refundPercentage == 95 ? "95% refund - Event was rescheduled" : cancellationReason));
+        
+        return """
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { margin: 0; padding: 20px; font-family: 'Segoe UI', Arial, sans-serif; background-color: #f4f4f4; }
+        .invoice { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+        .header { background: linear-gradient(135deg, #dc2626 0%%, #b91c1c 100%%); padding: 30px; text-align: center; }
+        .header h1 { color: #ffffff; margin: 0; font-size: 24px; }
+        .cancelled-badge { background: #ffffff; color: #dc2626; padding: 8px 20px; border-radius: 20px; display: inline-block; margin-top: 10px; font-weight: bold; font-size: 13px; }
+        .invoice-info { background: #fef2f2; padding: 20px 30px; border-bottom: 2px dashed #e5e7eb; }
+        .invoice-row { display: flex; justify-content: space-between; margin: 8px 0; }
+        .invoice-label { color: #6b7280; font-size: 13px; }
+        .invoice-value { color: #1f2937; font-weight: 600; font-size: 13px; }
+        .content { padding: 30px; }
+        .item-box { background: #f9fafb; border-radius: 10px; padding: 20px; margin-bottom: 20px; border: 1px solid #e5e7eb; }
+        .item-icon { font-size: 32px; margin-bottom: 10px; }
+        .item-name { font-size: 18px; font-weight: bold; color: #1f2937; }
+        .item-type { color: #6b7280; font-size: 12px; text-transform: uppercase; }
+        .breakdown { margin: 25px 0; }
+        .breakdown-title { font-weight: bold; color: #1f2937; font-size: 14px; margin-bottom: 15px; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; }
+        .breakdown-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f3f4f6; }
+        .breakdown-row:last-child { border-bottom: none; }
+        .breakdown-label { color: #6b7280; }
+        .breakdown-value { color: #1f2937; font-weight: 600; }
+        .refund-box { background: linear-gradient(135deg, #dcfce7 0%%, #bbf7d0 100%%); border-radius: 12px; padding: 20px; margin: 20px 0; border: 2px solid #22c55e; }
+        .refund-title { color: #166534; font-weight: bold; font-size: 14px; margin-bottom: 10px; }
+        .refund-amount { font-size: 36px; font-weight: bold; color: #22c55e; text-align: center; }
+        .refund-note { color: #15803d; font-size: 12px; text-align: center; margin-top: 5px; }
+        .reason-box { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px 20px; margin: 20px 0; border-radius: 0 8px 8px 0; }
+        .reason-title { color: #92400e; font-weight: bold; font-size: 13px; margin-bottom: 5px; }
+        .reason-text { color: #78350f; font-size: 13px; }
+        .policy-note { background: #f3f4f6; padding: 15px; border-radius: 8px; margin-top: 20px; }
+        .policy-title { font-weight: bold; color: #374151; font-size: 12px; margin-bottom: 8px; }
+        .policy-text { color: #6b7280; font-size: 11px; line-height: 1.6; }
+        .footer { background: #1f2937; color: #9ca3af; padding: 20px 30px; font-size: 11px; text-align: center; }
+        .footer a { color: #93c5fd; text-decoration: none; }
+        .strikethrough { text-decoration: line-through; color: #9ca3af; }
+    </style>
+</head>
+<body>
+    <div class="invoice">
+        <div class="header">
+            <h1>❌ Booking Cancelled</h1>
+            <div class="cancelled-badge">CANCELLED & REFUNDED</div>
+        </div>
+        
+        <div class="invoice-info">
+            <div class="invoice-row">
+                <span class="invoice-label">Invoice Number</span>
+                <span class="invoice-value">#INV-%d</span>
+            </div>
+            <div class="invoice-row">
+                <span class="invoice-label">Cancelled On</span>
+                <span class="invoice-value">%s</span>
+            </div>
+            <div class="invoice-row">
+                <span class="invoice-label">Customer</span>
+                <span class="invoice-value">%s</span>
+            </div>
+        </div>
+        
+        <div class="content">
+            <div class="item-box">
+                <div class="item-icon">%s</div>
+                <div class="item-type">%s BOOKING</div>
+                <div class="item-name">%s</div>
+                <div style="color: #6b7280; font-size: 13px; margin-top: 5px;">📅 %s</div>
+            </div>
+            
+            <div class="breakdown">
+                <div class="breakdown-title">💰 Original Payment Breakdown</div>
+                <div class="breakdown-row">
+                    <span class="breakdown-label">Original Total</span>
+                    <span class="breakdown-value strikethrough">₹%.2f</span>
+                </div>
+                <div class="breakdown-row">
+                    <span class="breakdown-label">Points Used</span>
+                    <span class="breakdown-value">%d pts (≈ ₹%.2f)</span>
+                </div>
+                <div class="breakdown-row">
+                    <span class="breakdown-label">Cash Paid (PayPal)</span>
+                    <span class="breakdown-value">₹%.2f</span>
+                </div>
+                <div class="breakdown-row">
+                    <span class="breakdown-label">Platform Fee</span>
+                    <span class="breakdown-value">2 pts</span>
+                </div>
+            </div>
+            
+            <div class="reason-box">
+                <div class="reason-title">📋 Cancellation Policy Applied</div>
+                <div class="reason-text">%s</div>
+            </div>
+            
+            <div class="refund-box">
+                <div class="refund-title">🎁 Your Refund (%d%%)</div>
+                <div class="refund-amount">+%d Points</div>
+                <div class="refund-note">Points added to your account • NO cash refund</div>
+            </div>
+            
+            <div class="policy-note">
+                <div class="policy-title">ℹ️ Refund Policy</div>
+                <div class="policy-text">
+                    • 2+ days before: 100%% refund as points<br>
+                    • Within 2 days: 75%% refund as points<br>
+                    • Event rescheduled by vendor: 95%% refund<br>
+                    • Event cancelled by vendor: 100%% refund<br>
+                    <strong>Note:</strong> All refunds are processed as points based on the total booking value. Cash payments are not refundable.
+                </div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>© 2025 %s. All rights reserved.</p>
+            <p>Questions? <a href="mailto:pranaib20@gmail.com">Contact Support</a></p>
+        </div>
+    </div>
+</body>
+</html>
+""".formatted(
+    bookingId, 
+    java.time.LocalDate.now().toString(), 
+    userName,
+    itemIcon,
+    itemType,
+    itemName,
+    bookingDate,
+    originalAmount,
+    pointsUsed,
+    pointsValue,
+    cashPaid,
+    refundMessage,
+    refundPercentage,
+    pointsRefunded,
+    appName
+);
+    }
+    
+    /**
+     * Send booking confirmation email with invoice-style details
+     */
+    @Async
+    public void sendBookingConfirmationInvoice(
+            String toEmail,
+            String userName,
+            Long bookingId,
+            String itemName,
+            String itemType,
+            String bookingDate,
+            String bookingTime,
+            String location,
+            int quantity,
+            double subtotal,
+            int pointsUsed,
+            double pointsValue,
+            double cashPaid,
+            int platformFee,
+            double totalAmount,
+            int pointsEarned,
+            int conversionRate
+    ) {
+        try {
+            String subject = "✅ Booking Confirmed - Invoice #" + bookingId;
+            String htmlContent = buildConfirmationInvoiceTemplate(
+                userName, bookingId, itemName, itemType, bookingDate, bookingTime,
+                location, quantity, subtotal, pointsUsed, pointsValue, cashPaid,
+                platformFee, totalAmount, pointsEarned, conversionRate
+            );
+            
+            sendHtmlEmail(toEmail, subject, htmlContent);
+            log.info("Booking confirmation invoice sent to: {}", toEmail);
+        } catch (Exception e) {
+            log.error("Failed to send confirmation invoice to: {}", toEmail, e);
+        }
+    }
+    
+    /**
+     * Build beautiful industrial invoice template for booking confirmation
+     */
+    private String buildConfirmationInvoiceTemplate(
+            String userName, Long bookingId, String itemName, String itemType,
+            String bookingDate, String bookingTime, String location, int quantity,
+            double subtotal, int pointsUsed, double pointsValue, double cashPaid,
+            int platformFee, double totalAmount, int pointsEarned, int conversionRate
+    ) {
+        String itemIcon = itemType.equals("EVENT") ? "🎪" : "🏢";
+        String quantityLabel = itemType.equals("EVENT") ? "Tickets" : "Hours";
+        
+        return """
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { margin: 0; padding: 20px; font-family: 'Segoe UI', Arial, sans-serif; background-color: #f4f4f4; }
+        .invoice { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+        .header { background: linear-gradient(135deg, #10b981 0%%, #059669 100%%); padding: 30px; text-align: center; }
+        .header h1 { color: #ffffff; margin: 0; font-size: 24px; }
+        .confirmed-badge { background: #ffffff; color: #10b981; padding: 8px 20px; border-radius: 20px; display: inline-block; margin-top: 10px; font-weight: bold; font-size: 13px; }
+        .invoice-info { background: #ecfdf5; padding: 20px 30px; border-bottom: 2px dashed #e5e7eb; }
+        .invoice-row { display: flex; justify-content: space-between; margin: 8px 0; }
+        .invoice-label { color: #6b7280; font-size: 13px; }
+        .invoice-value { color: #1f2937; font-weight: 600; font-size: 13px; }
+        .content { padding: 30px; }
+        .item-box { background: #f9fafb; border-radius: 10px; padding: 20px; margin-bottom: 20px; border: 1px solid #e5e7eb; }
+        .item-icon { font-size: 32px; margin-bottom: 10px; }
+        .item-name { font-size: 18px; font-weight: bold; color: #1f2937; }
+        .item-type { color: #6b7280; font-size: 12px; text-transform: uppercase; }
+        .item-details { margin-top: 15px; padding-top: 15px; border-top: 1px solid #e5e7eb; }
+        .detail-row { display: flex; align-items: center; margin: 8px 0; color: #4b5563; font-size: 13px; }
+        .detail-row span { margin-left: 8px; }
+        .breakdown { margin: 25px 0; }
+        .breakdown-title { font-weight: bold; color: #1f2937; font-size: 14px; margin-bottom: 15px; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; }
+        .breakdown-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f3f4f6; }
+        .breakdown-row.total { border-top: 2px solid #1f2937; border-bottom: none; padding-top: 15px; margin-top: 10px; }
+        .breakdown-label { color: #6b7280; }
+        .breakdown-value { color: #1f2937; font-weight: 600; }
+        .breakdown-value.discount { color: #22c55e; }
+        .breakdown-value.total { font-size: 20px; color: #10b981; }
+        .points-box { background: linear-gradient(135deg, #fef3c7 0%%, #fde68a 100%%); border-radius: 12px; padding: 20px; margin: 20px 0; text-align: center; border: 2px solid #f59e0b; }
+        .points-title { color: #92400e; font-size: 14px; margin-bottom: 5px; }
+        .points-amount { font-size: 28px; font-weight: bold; color: #d97706; }
+        .points-note { color: #b45309; font-size: 11px; margin-top: 5px; }
+        .footer { background: #1f2937; color: #9ca3af; padding: 20px 30px; font-size: 11px; text-align: center; }
+        .footer a { color: #93c5fd; text-decoration: none; }
+        .button { background: #10b981; color: white; padding: 12px 25px; text-decoration: none; border-radius: 8px; display: inline-block; margin-top: 15px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="invoice">
+        <div class="header">
+            <h1>✅ Booking Confirmed</h1>
+            <div class="confirmed-badge">PAYMENT SUCCESSFUL</div>
+        </div>
+        
+        <div class="invoice-info">
+            <div class="invoice-row">
+                <span class="invoice-label">Invoice Number</span>
+                <span class="invoice-value">#INV-%d</span>
+            </div>
+            <div class="invoice-row">
+                <span class="invoice-label">Booking Date</span>
+                <span class="invoice-value">%s</span>
+            </div>
+            <div class="invoice-row">
+                <span class="invoice-label">Customer</span>
+                <span class="invoice-value">%s</span>
+            </div>
+        </div>
+        
+        <div class="content">
+            <div class="item-box">
+                <div class="item-icon">%s</div>
+                <div class="item-type">%s</div>
+                <div class="item-name">%s</div>
+                <div class="item-details">
+                    <div class="detail-row">📅 <span>%s</span></div>
+                    <div class="detail-row">🕐 <span>%s</span></div>
+                    <div class="detail-row">📍 <span>%s</span></div>
+                    <div class="detail-row">🎫 <span>%d %s</span></div>
+                </div>
+            </div>
+            
+            <div class="breakdown">
+                <div class="breakdown-title">💰 Payment Breakdown</div>
+                <div class="breakdown-row">
+                    <span class="breakdown-label">Subtotal</span>
+                    <span class="breakdown-value">₹%.2f</span>
+                </div>
+                <div class="breakdown-row">
+                    <span class="breakdown-label">Points Discount (%d pts)</span>
+                    <span class="breakdown-value discount">-₹%.2f</span>
+                </div>
+                <div class="breakdown-row">
+                    <span class="breakdown-label">Platform Fee</span>
+                    <span class="breakdown-value">%d pts</span>
+                </div>
+                <div class="breakdown-row">
+                    <span class="breakdown-label">Cash Paid (PayPal)</span>
+                    <span class="breakdown-value">₹%.2f</span>
+                </div>
+                <div class="breakdown-row total">
+                    <span class="breakdown-label" style="font-weight: bold; color: #1f2937;">Total Paid</span>
+                    <span class="breakdown-value total">₹%.2f + %d pts</span>
+                </div>
+            </div>
+            
+            <div class="points-box">
+                <div class="points-title">🎁 Points Earned</div>
+                <div class="points-amount">+%d Points</div>
+                <div class="points-note">Added to your account • Use on your next booking!</div>
+            </div>
+            
+            <div style="text-align: center;">
+                <a href="%s/user/bookings" class="button">View My Bookings</a>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>© 2025 %s. All rights reserved.</p>
+            <p>Questions? <a href="mailto:pranaib20@gmail.com">Contact Support</a></p>
+        </div>
+    </div>
+</body>
+</html>
+""".formatted(
+    bookingId,
+    java.time.LocalDate.now().toString(),
+    userName,
+    itemIcon,
+    itemType,
+    itemName,
+    bookingDate,
+    bookingTime != null ? bookingTime : "TBA",
+    location != null ? location : "See booking details",
+    quantity,
+    quantityLabel,
+    subtotal,
+    pointsUsed,
+    pointsValue,
+    platformFee,
+    cashPaid,
+    totalAmount,
+    pointsUsed + platformFee,
+    pointsEarned,
+    appUrl,
+    appName
+);
+    }
 }
-

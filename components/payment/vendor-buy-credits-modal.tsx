@@ -1,14 +1,16 @@
-"use client"
+﻿"use client"
 
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { StripeProvider } from './stripe-provider'
-import { PaymentCardForm } from './payment-card-form'
-import { CardElement } from '@stripe/react-stripe-js'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Button } from "@/components/ui/button"
+import { useConversionRate } from "@/lib/contexts/conversion-rate-context"
 import axios from 'axios'
-import { CheckCircle, Loader2, Building2 } from 'lucide-react'
+import { CheckCircle, Loader2, IndianRupee, Building2, AlertCircle } from 'lucide-react'
+
+// PayPal Client ID - Sandbox
+const PAYPAL_CLIENT_ID = "AcHqC_6TsYO9h_Zeaq9D-ADt_lsf63e69ifdyLvvJv-BdKNjZ-4yPMvqGO3bg9nrywlMI_HPq_Qw8occ"
 
 interface VendorBuyCreditsModalProps {
     isOpen: boolean
@@ -17,261 +19,267 @@ interface VendorBuyCreditsModalProps {
     onSuccess?: () => void
 }
 
-function VendorBuyCreditsContent({ onClose, vendorId, onSuccess }: Omit<VendorBuyCreditsModalProps, 'isOpen'>) {
+export function VendorBuyCreditsModal({ isOpen, onClose, vendorId, onSuccess }: VendorBuyCreditsModalProps) {
+    const { conversionRate } = useConversionRate()
     const [amount, setAmount] = useState<string>('')
-    const [points, setPoints] = useState<number>(0)
     const [isLoading, setIsLoading] = useState(false)
     const [isSuccess, setIsSuccess] = useState(false)
     const [error, setError] = useState<string | null>(null)
-    const [clientSecret, setClientSecret] = useState<string | null>(null)
-    const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null)
+    const [step, setStep] = useState<'amount' | 'paypal'>('amount')
+    const [paypalLoaded, setPaypalLoaded] = useState(false)
 
-    // Get auth headers
+    // Calculate points based on conversion rate
+    const points = Math.floor((parseFloat(amount) || 0) * conversionRate)
+
     const getAuthHeaders = () => ({
         headers: {
             'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
         }
     })
 
-    // Calculate points when amount changes
-    const handleAmountChange = async (value: string) => {
-        setAmount(value)
-        const numValue = parseFloat(value)
-
-        if (numValue > 0) {
-            try {
-                // Calculate-points is public endpoint - no auth header needed
-                const response = await axios.get(
-                    `http://localhost:8080/api/stripe/calculate-points?amount=${numValue}`
-                )
-                setPoints(response.data.points)
-            } catch (err) {
-                console.error('Error calculating points:', err)
-                // Fallback: calculate locally (1 point per 1 INR as default)
-                setPoints(Math.floor(numValue))
-            }
-        } else {
-            setPoints(0)
-        }
-    }
-
-    const handleCreatePaymentIntent = async () => {
-        const numAmount = parseFloat(amount)
-        if (numAmount <= 0) {
-            setError('Please enter a valid amount')
-            return
-        }
-
-        try {
-            setIsLoading(true)
-            setError(null)
-
-            // Use vendor endpoint for payment intent
-            const response = await axios.post(
-                'http://localhost:8080/api/stripe/vendor/create-payment-intent',
-                { vendorId, amountUsd: numAmount },
-                getAuthHeaders()
-            )
-
-            setClientSecret(response.data.clientSecret)
-            setPaymentIntentId(response.data.paymentIntentId)
-        } catch (err: any) {
-            // Fallback to user endpoint if vendor endpoint doesn't exist
-            try {
-                const response = await axios.post(
-                    'http://localhost:8080/api/stripe/create-payment-intent',
-                    { userId: vendorId, amountUsd: numAmount, isVendor: true },
-                    getAuthHeaders()
-                )
-                setClientSecret(response.data.clientSecret)
-                setPaymentIntentId(response.data.paymentIntentId)
-            } catch (fallbackErr: any) {
-                setError(fallbackErr.response?.data?.error || 'Failed to create payment intent')
-            }
-        } finally {
-            setIsLoading(false)
-        }
-    }
-
-    const handlePaymentSubmit = async (stripe: any, elements: any) => {
-        if (!clientSecret || !paymentIntentId) return
-
-        setIsLoading(true)
-        setError(null)
-
-        try {
-            const cardElement = elements.getElement(CardElement)
-
-            const { error: stripeError, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
-                payment_method: {
-                    card: cardElement,
-                },
-            })
-
-            if (stripeError) {
-                setError(stripeError.message)
-                setIsLoading(false)
+    // Load PayPal SDK
+    useEffect(() => {
+        if (step === 'paypal' && !paypalLoaded) {
+            const existingScript = document.getElementById('paypal-sdk-vendor')
+            if (existingScript) {
+                setPaypalLoaded(true)
                 return
             }
 
-            if (paymentIntent.status === 'succeeded') {
-                // Confirm payment on backend - try vendor endpoint first
-                try {
-                    const response = await axios.post(
-                        'http://localhost:8080/api/stripe/vendor/confirm-payment',
-                        { paymentIntentId: paymentIntent.id, vendorId },
-                        getAuthHeaders()
-                    )
-
-                    if (response.data.success) {
-                        setIsSuccess(true)
-                        setTimeout(() => {
-                            onSuccess?.()
-                            onClose()
-                        }, 2000)
-                    } else {
-                        setError(response.data.message || 'Payment confirmation failed')
-                    }
-                } catch {
-                    // Fallback to regular confirm
-                    const response = await axios.post(
-                        'http://localhost:8080/api/stripe/confirm-payment',
-                        { paymentIntentId: paymentIntent.id },
-                        getAuthHeaders()
-                    )
-
-                    if (response.data.success) {
-                        setIsSuccess(true)
-                        setTimeout(() => {
-                            onSuccess?.()
-                            onClose()
-                        }, 2000)
-                    } else {
-                        setError(response.data.message || 'Payment confirmation failed')
-                    }
-                }
+            const script = document.createElement('script')
+            script.id = 'paypal-sdk-vendor'
+            script.src = `https://www.paypal.com/sdk/js?client-id=${PAYPAL_CLIENT_ID}&currency=USD`
+            script.async = true
+            script.onload = () => {
+                setPaypalLoaded(true)
             }
-        } catch (err: any) {
-            setError(err.response?.data?.error || err.message || 'Payment failed')
-        } finally {
-            setIsLoading(false)
+            script.onerror = () => {
+                setError('Failed to load PayPal. Please try again.')
+            }
+            document.body.appendChild(script)
         }
+    }, [step, paypalLoaded])
+
+    // Render PayPal buttons when SDK is loaded
+    useEffect(() => {
+        if (paypalLoaded && step === 'paypal' && (window as any).paypal) {
+            const paypalButtonContainer = document.getElementById('paypal-button-container-vendor')
+            if (paypalButtonContainer) {
+                paypalButtonContainer.innerHTML = '' // Clear previous buttons
+
+                    ; (window as any).paypal.Buttons({
+                        style: {
+                            layout: 'vertical',
+                            color: 'blue',
+                            shape: 'rect',
+                            label: 'pay'
+                        },
+                        createOrder: (_data: any, actions: any) => {
+                            return actions.order.create({
+                                purchase_units: [{
+                                    amount: {
+                                        value: parseFloat(amount).toFixed(2),
+                                        currency_code: 'USD'
+                                    },
+                                    description: `Vendor purchase ${points} points`
+                                }]
+                            })
+                        },
+                        onApprove: async (_data: any, actions: any) => {
+                            setIsLoading(true)
+                            setError(null)
+
+                            try {
+                                // Capture the order
+                                const order = await actions.order.capture()
+
+                                // Send to backend to credit points
+                                const response = await axios.post(
+                                    'http://localhost:8080/api/vendor/points/purchase',
+                                    {
+                                        points: points,
+                                        amount: parseFloat(amount),
+                                        paymentMethod: 'PAYPAL',
+                                        transactionId: order.id,
+                                        paypalOrderId: order.id
+                                    },
+                                    getAuthHeaders()
+                                )
+
+                                if (response.data.success) {
+                                    setIsSuccess(true)
+                                    setTimeout(() => {
+                                        onSuccess?.()
+                                        handleClose()
+                                    }, 2000)
+                                } else {
+                                    setError(response.data.message || 'Failed to credit points')
+                                }
+                            } catch (err: any) {
+                                setError(err.response?.data?.message || 'Payment completed but failed to credit points. Please contact support.')
+                            } finally {
+                                setIsLoading(false)
+                            }
+                        },
+                        onError: (err: any) => {
+                            console.error('PayPal error:', err)
+                            setError('PayPal payment failed. Please try again.')
+                        },
+                        onCancel: () => {
+                            setError('Payment cancelled')
+                        }
+                    }).render('#paypal-button-container-vendor')
+            }
+        }
+    }, [paypalLoaded, step, amount, points])
+
+    const handleContinueToPayPal = () => {
+        const numAmount = parseFloat(amount)
+        if (numAmount <= 0 || numAmount < 10) {
+            setError('Minimum amount is ₹10')
+            return
+        }
+        setError(null)
+        setStep('paypal')
+    }
+
+    const handleClose = () => {
+        setAmount('')
+        setStep('amount')
+        setError(null)
+        setIsSuccess(false)
+        setIsLoading(false)
+        onClose()
     }
 
     if (isSuccess) {
         return (
-            <div className="flex flex-col items-center justify-center py-8">
-                <div className="w-16 h-16 bg-gradient-to-br from-emerald-400 to-teal-500 rounded-full flex items-center justify-center mb-4">
-                    <CheckCircle className="w-10 h-10 text-white" />
-                </div>
-                <h3 className="text-xl font-semibold mb-2 text-emerald-600">Payment Successful!</h3>
-                <p className="text-muted-foreground">{points.toLocaleString()} points added to your account</p>
-            </div>
+            <Dialog open={isOpen} onOpenChange={handleClose}>
+                <DialogContent className="sm:max-w-md">
+                    <div className="flex flex-col items-center justify-center py-8">
+                        <CheckCircle className="w-16 h-16 text-green-500 mb-4" />
+                        <h3 className="text-xl font-semibold mb-2">Purchase Successful!</h3>
+                        <p className="text-muted-foreground">{points.toLocaleString()} points added to your vendor account</p>
+                    </div>
+                </DialogContent>
+            </Dialog>
         )
     }
 
     return (
-        <div className="space-y-6">
-            {!clientSecret ? (
-                <>
-                    <div className="space-y-2">
-                        <Label htmlFor="amount" className="text-base font-medium">Amount (INR ₹)</Label>
-                        <Input
-                            id="amount"
-                            type="number"
-                            step="0.01"
-                            min="1"
-                            placeholder="Enter amount (e.g. 100)"
-                            value={amount}
-                            onChange={(e) => handleAmountChange(e.target.value)}
-                            className="h-12 text-lg"
-                        />
-                        {points > 0 && (
-                            <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 p-3 rounded-lg">
-                                <p className="text-sm text-emerald-800 dark:text-emerald-200">
-                                    You will receive <span className="font-bold text-emerald-600">{points.toLocaleString()} points</span>
-                                </p>
-                            </div>
-                        )}
-                    </div>
-
-                    {error && (
-                        <div className="text-sm text-red-600 bg-red-50 dark:bg-red-950/30 p-3 rounded-lg border border-red-200 dark:border-red-800">
-                            {error}
-                        </div>
-                    )}
-
-                    <button
-                        onClick={handleCreatePaymentIntent}
-                        disabled={!amount || parseFloat(amount) <= 0 || isLoading}
-                        className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 text-white px-4 py-3 rounded-lg hover:from-emerald-600 hover:to-teal-700 disabled:opacity-50 disabled:cursor-not-allowed transition font-semibold text-lg shadow-lg shadow-emerald-500/25"
-                    >
-                        {isLoading ? (
-                            <>
-                                <Loader2 className="w-5 h-5 mr-2 animate-spin inline" />
-                                Processing...
-                            </>
-                        ) : (
-                            'Continue to Payment'
-                        )}
-                    </button>
-                </>
-            ) : (
-                <>
-                    <div className="bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/30 p-4 rounded-lg border border-emerald-200 dark:border-emerald-800">
-                        <div className="flex justify-between items-center mb-2">
-                            <span className="text-sm text-muted-foreground">Amount</span>
-                            <span className="font-semibold text-lg">₹{parseFloat(amount).toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                            <span className="text-sm text-muted-foreground">Points</span>
-                            <span className="font-bold text-emerald-600 text-lg">{points.toLocaleString()}</span>
-                        </div>
-                    </div>
-
-                    <div className="space-y-2">
-                        <Label className="text-base font-medium">Card Details</Label>
-                        <p className="text-sm text-muted-foreground mb-3">
-                            Enter your card information securely via Stripe
-                        </p>
-                    </div>
-
-                    <PaymentCardForm
-                        onSubmit={handlePaymentSubmit}
-                        isLoading={isLoading}
-                        buttonText={`Pay ₹${parseFloat(amount).toFixed(2)}`}
-                    />
-
-                    {error && (
-                        <div className="text-sm text-red-600 bg-red-50 dark:bg-red-950/30 p-3 rounded-lg border border-red-200 dark:border-red-800">
-                            {error}
-                        </div>
-                    )}
-                </>
-            )}
-        </div>
-    )
-}
-
-export function VendorBuyCreditsModal({ isOpen, onClose, vendorId, onSuccess }: VendorBuyCreditsModalProps) {
-    return (
-        <Dialog open={isOpen} onOpenChange={onClose}>
+        <Dialog open={isOpen} onOpenChange={handleClose}>
             <DialogContent className="sm:max-w-md">
                 <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2 text-xl">
-                        <div className="p-2 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-lg">
-                            <Building2 className="h-5 w-5 text-white" />
-                        </div>
-                        Buy Credits
-                    </DialogTitle>
+                    <div className="flex items-center gap-2">
+                        <Building2 className="h-5 w-5 text-primary" />
+                        <DialogTitle>Buy Vendor Credits</DialogTitle>
+                    </div>
                     <DialogDescription>
-                        Purchase points to create venues and events
+                        Purchase points for creating events and venues
                     </DialogDescription>
                 </DialogHeader>
 
-                <StripeProvider>
-                    <VendorBuyCreditsContent onClose={onClose} vendorId={vendorId} onSuccess={onSuccess} />
-                </StripeProvider>
+                <div className="space-y-6">
+                    {step === 'amount' ? (
+                        <>
+                            <div className="space-y-2">
+                                <Label htmlFor="amount">Amount (INR ₹)</Label>
+                                <div className="relative">
+                                    <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground">₹</span>
+                                    <Input
+                                        id="amount"
+                                        type="number"
+                                        min="10"
+                                        placeholder="100"
+                                        value={amount}
+                                        onChange={(e) => setAmount(e.target.value)}
+                                        className="pl-8"
+                                    />
+                                </div>
+                                {points > 0 && (
+                                    <p className="text-sm text-muted-foreground">
+                                        You will receive <span className="font-semibold text-primary">{points.toLocaleString()} points</span>
+                                        <span className="text-xs ml-1">(Rate: {conversionRate} pts/$1)</span>
+                                    </p>
+                                )}
+                            </div>
+
+                            {error && (
+                                <div className="text-sm text-red-600 bg-red-50 p-3 rounded-lg flex items-center gap-2">
+                                    <AlertCircle className="h-4 w-4" />
+                                    {error}
+                                </div>
+                            )}
+
+                            <Button
+                                onClick={handleContinueToPayPal}
+                                disabled={!amount || parseFloat(amount) < 10}
+                                className="w-full bg-[#0070ba] hover:bg-[#003087]"
+                            >
+                                <svg className="w-5 h-5 mr-2" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M7.076 21.337H2.47a.641.641 0 0 1-.633-.74L4.944.901C5.026.382 5.474 0 5.998 0h7.46c2.57 0 4.578.543 5.69 1.81 1.01 1.15 1.304 2.42 1.012 4.287-.023.143-.047.288-.077.437-.983 5.05-4.349 6.797-8.647 6.797h-2.19c-.524 0-.968.382-1.05.9l-1.12 7.106z" />
+                                </svg>
+                                Continue with PayPal
+                            </Button>
+
+                            <p className="text-xs text-center text-muted-foreground">
+                                Secure payment via PayPal • Sandbox Mode
+                            </p>
+                        </>
+                    ) : (
+                        <>
+                            <div className="bg-muted p-4 rounded-lg">
+                                <div className="flex justify-between items-center mb-2">
+                                    <span className="text-sm text-muted-foreground">Amount</span>
+                                    <span className="font-semibold">₹{parseFloat(amount).toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-sm text-muted-foreground">Points</span>
+                                    <span className="font-semibold text-primary">{points.toLocaleString()}</span>
+                                </div>
+                            </div>
+
+                            {isLoading ? (
+                                <div className="flex flex-col items-center py-8">
+                                    <Loader2 className="w-8 h-8 animate-spin text-primary mb-4" />
+                                    <p className="text-muted-foreground">Processing payment...</p>
+                                </div>
+                            ) : (
+                                <div id="paypal-button-container-vendor" className="min-h-[150px]">
+                                    {!paypalLoaded && (
+                                        <div className="flex items-center justify-center py-8">
+                                            <Loader2 className="w-6 h-6 animate-spin mr-2" />
+                                            <span className="text-muted-foreground">Loading PayPal...</span>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {error && (
+                                <div className="text-sm text-red-600 bg-red-50 p-3 rounded-lg flex items-center gap-2">
+                                    <AlertCircle className="h-4 w-4" />
+                                    {error}
+                                </div>
+                            )}
+
+                            <Button
+                                variant="outline"
+                                onClick={() => {
+                                    setStep('amount')
+                                    setError(null)
+                                }}
+                                disabled={isLoading}
+                                className="w-full"
+                            >
+                                Back
+                            </Button>
+
+                            <p className="text-xs text-muted-foreground text-center">
+                                Log in with your PayPal account to complete payment
+                            </p>
+                        </>
+                    )}
+                </div>
             </DialogContent>
         </Dialog>
     )

@@ -6,6 +6,8 @@ import Link from "next/link"
 import { eventsApi } from "@/lib/api/events"
 import { authApi } from "@/lib/api/auth"
 import { useAuth } from "@/lib/contexts/auth-context"
+import { useConversionRate } from "@/lib/contexts/conversion-rate-context"
+import { usePlatformFees } from "@/lib/contexts/platform-fees-context"
 import { EventBookingForm } from "@/components/booking/event-booking-form"
 import { ReviewSection } from "@/components/reviews"
 import { ImageGallery } from "@/components/ImageGallery"
@@ -14,7 +16,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Calendar, MapPin, Users, Ticket, ArrowLeft, CheckCircle, AlertCircle, Armchair } from "lucide-react"
+import { Calendar, MapPin, Users, Ticket, ArrowLeft, CheckCircle, AlertCircle, Armchair, Phone, Mail, Building2 } from "lucide-react"
 import type { Event, SeatLayout } from "@/lib/types/booking"
 import ViewLocationMap from "@/components/view-location-map"
 
@@ -22,6 +24,8 @@ export default function EventDetailPage() {
   const params = useParams()
   const router = useRouter()
   const { user } = useAuth()
+  const { conversionRate } = useConversionRate()
+  const { platformFees } = usePlatformFees()
   const [event, setEvent] = useState<Event | null>(null)
   const [userPoints, setUserPoints] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
@@ -75,14 +79,14 @@ export default function EventDetailPage() {
     loadEventAndProfile()
   }, [params.id, user, router])
 
-  const handleSeatBooking = async (seatIds: number[], pointsToUse: number) => {
+  const handleSeatBooking = async (seatIds: number[], pointsToUse: number, paypalTransactionId?: string | null) => {
     if (!event) return
 
     setIsBooking(true)
     setBookingError("")
 
     try {
-      const result = await eventsApi.bookSeats(event.id, seatIds, pointsToUse)
+      const result = await eventsApi.bookSeats(event.id, seatIds, pointsToUse, paypalTransactionId || undefined)
       if (result.success) {
         setBookingSuccess(true)
         // Refresh layout to show booked seats
@@ -187,13 +191,79 @@ export default function EventDetailPage() {
                 </div>
               </div>
 
-              <div className="prose max-w-none">
-                <h2 className="text-2xl font-semibold mb-3">About This Event</h2>
-                <p className="text-muted-foreground leading-relaxed">{event.description}</p>
-              </div>
+              <h2 className="text-2xl font-semibold mb-3">About This Event</h2>
+              <p className="text-muted-foreground leading-relaxed">{event.description}</p>
             </div>
 
-            {/* Seat Selection Section - Full Width */}
+            {/* Host Information */}
+            {(event.vendorBusinessName || event.vendorBusinessPhone || event.vendorEmail) && (
+              <Card className="mt-6">
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Building2 className="h-5 w-5 text-primary" />
+                    Hosted by {event.vendorBusinessName || "Vendor"}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {event.vendorBusinessPhone && (
+                    <div className="flex items-center gap-3 text-muted-foreground">
+                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <Phone className="h-4 w-4 text-primary" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium text-foreground">Phone</p>
+                        <p className="text-sm hover:text-primary transition-colors">
+                          <a href={`tel:${event.vendorBusinessPhone}`}>{event.vendorBusinessPhone}</a>
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  {event.vendorEmail && (
+                    <div className="flex items-center gap-3 text-muted-foreground">
+                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <Mail className="h-4 w-4 text-primary" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-medium text-foreground">Email</p>
+                        <p className="text-sm hover:text-primary transition-colors">
+                          <a href={`mailto:${event.vendorEmail}`}>{event.vendorEmail}</a>
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Ticket Types for quantity-based events - inside main content */}
+            {!isSeatSelection && (
+              <Card className="mt-6">
+                <CardHeader>
+                  <CardTitle>Available Tickets</CardTitle>
+                  <CardDescription>Choose your ticket type</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {event.ticketTypes.map((ticket) => (
+                      <div key={ticket.id} className="flex items-center justify-between p-4 rounded-lg border">
+                        <div>
+                          <h3 className="font-semibold mb-1">{ticket.name}</h3>
+                          <p className="text-sm text-muted-foreground">
+                            {ticket.availableQuantity} / {ticket.quantity} available
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-2xl font-bold text-primary">₹{ticket.price}</p>
+                          <p className="text-xs text-muted-foreground">per ticket</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Seat Selection Section - for seat-based events */}
             {isSeatSelection && seatLayout && user?.role === "USER" && !isPastEvent && (
               <Card className="mt-6">
                 <CardHeader>
@@ -224,40 +294,15 @@ export default function EventDetailPage() {
                     maxSeats={10}
                     isLoading={isBooking}
                     userPoints={userPoints}
+                    conversionRate={conversionRate}
+                    platformFee={platformFees.userPlatformFeePoints}
+                    eventName={event.name}
                   />
                 </CardContent>
               </Card>
             )}
 
-            {/* Ticket Types for quantity-based events */}
-            {!isSeatSelection && (
-              <Card className="mt-6">
-                <CardHeader>
-                  <CardTitle>Available Tickets</CardTitle>
-                  <CardDescription>Choose your ticket type</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {event.ticketTypes.map((ticket) => (
-                      <div key={ticket.id} className="flex items-center justify-between p-4 rounded-lg border">
-                        <div>
-                          <h3 className="font-semibold mb-1">{ticket.name}</h3>
-                          <p className="text-sm text-muted-foreground">
-                            {ticket.availableQuantity} / {ticket.quantity} available
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-2xl font-bold text-primary">${ticket.price}</p>
-                          <p className="text-xs text-muted-foreground">per ticket</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Reviews Section */}
+            {/* Reviews Section - inside main content */}
             <ReviewSection
               eventId={event.id}
               currentUserId={user?.role === "USER" ? user?.userId : undefined}
@@ -328,15 +373,15 @@ export default function EventDetailPage() {
             </Card>
           )}
         </div>
-      </div>
 
-      {/* Location Popup */}
-      {showLocationMap && event && (
-        <ViewLocationMap
-          address={event.location}
-          onClose={() => setShowLocationMap(false)}
-        />
-      )}
+        {/* Location Map Modal */}
+        {showLocationMap && event && (
+          <ViewLocationMap
+            address={event.location}
+            onClose={() => setShowLocationMap(false)}
+          />
+        )}
+      </div>
     </div>
   )
 }

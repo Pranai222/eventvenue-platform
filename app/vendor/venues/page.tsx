@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
@@ -216,7 +216,7 @@ export default function VendorVenuesPage() {
                       <Users className="h-4 w-4" />Capacity: {venue.capacity}
                     </div>
                     <div>
-                      <span className="text-2xl font-bold text-primary">${venue.pricePerHour}</span>
+                      <span className="text-2xl font-bold text-primary">₹{venue.pricePerHour}</span>
                       <span className="text-xs text-muted-foreground">/hr</span>
                     </div>
                   </div>

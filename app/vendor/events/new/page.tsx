@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import type React from "react"
 
@@ -18,6 +18,7 @@ import { getToken } from "@/lib/auth"
 import { SeatCategoryForm, type SeatCategoryConfig } from "@/components/vendor/seat-category-form"
 import { SeatLayoutPreview } from "@/components/vendor/seat-layout-preview"
 import LocationPicker from "@/components/location-picker"
+import { usePlatformFees } from "@/lib/contexts/platform-fees-context"
 
 export default function CreateEventPage() {
   const router = useRouter()
@@ -26,6 +27,7 @@ export default function CreateEventPage() {
   const [success, setSuccess] = useState(false)
   const [bookingType, setBookingType] = useState<"QUANTITY" | "SEAT_SELECTION">("QUANTITY")
   const [seatCategories, setSeatCategories] = useState<SeatCategoryConfig[]>([])
+  const { platformFees } = usePlatformFees()
 
   const [formData, setFormData] = useState({
     name: "",
@@ -38,6 +40,7 @@ export default function CreateEventPage() {
     totalTickets: 0,
     pricePerTicket: 0,
     images: [] as string[],
+    vendorPhone: "",
   })
 
   // Calculate total seats from seat categories
@@ -98,6 +101,7 @@ export default function CreateEventPage() {
         images: formData.images.join(","),
         isActive: false,
         bookingType: bookingType,
+        vendorPhone: formData.vendorPhone,
       }
 
       const result = await eventsApi.create(backendEventData as any)
@@ -230,6 +234,19 @@ export default function CreateEventPage() {
                 </div>
               </div>
 
+              <div className="space-y-2">
+                <Label htmlFor="vendorPhone">Contact Phone Number *</Label>
+                <Input
+                  id="vendorPhone"
+                  type="tel"
+                  placeholder="e.g., +91 98765 43210"
+                  value={formData.vendorPhone}
+                  onChange={(e) => setFormData({ ...formData, vendorPhone: e.target.value })}
+                  required
+                />
+                <p className="text-xs text-muted-foreground">This will be shown to customers for contact purposes</p>
+              </div>
+
               {/* Booking Type Toggle */}
               <div className="space-y-3">
                 <Label>Booking Type</Label>
@@ -293,7 +310,7 @@ export default function CreateEventPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="pricePerTicket">Price Per Ticket ($)</Label>
+                    <Label htmlFor="pricePerTicket">Price Per Ticket (₹)</Label>
                     <Input
                       id="pricePerTicket"
                       type="number"
@@ -352,7 +369,7 @@ export default function CreateEventPage() {
                   <div className="text-right">
                     <div className="flex items-center gap-1">
                       <span className="text-2xl font-bold text-primary">
-                        {bookingType === "QUANTITY" ? "10" : "20"}
+                        {bookingType === "QUANTITY" ? platformFees.eventCreationPointsQuantity : platformFees.eventCreationPointsSeat}
                       </span>
                       <span className="text-sm text-muted-foreground">points</span>
                     </div>
@@ -373,7 +390,7 @@ export default function CreateEventPage() {
 
               <div className="flex gap-4">
                 <Button type="submit" disabled={isLoading}>
-                  {isLoading ? "Creating..." : `Create Event (${bookingType === "QUANTITY" ? "10" : "20"} pts)`}
+                  {isLoading ? "Creating..." : `Create Event (${bookingType === "QUANTITY" ? platformFees.eventCreationPointsQuantity : platformFees.eventCreationPointsSeat} pts)`}
                 </Button>
                 <Button type="button" variant="outline" onClick={() => router.back()}>
                   Cancel

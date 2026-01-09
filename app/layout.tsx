@@ -1,9 +1,11 @@
-import type React from "react"
+﻿import type React from "react"
 import type { Metadata } from "next"
 import { Inter, Poppins } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import { AuthProvider } from "@/lib/contexts/auth-context"
 import { ConversionRateProvider } from "@/lib/contexts/conversion-rate-context"
+import { PlatformFeesProvider } from "@/lib/contexts/platform-fees-context"
+import { AIChatButton } from "@/components/ai/ai-chat-button"
 import "./globals.css"
 
 const inter = Inter({ subsets: ["latin"] })
@@ -35,7 +37,10 @@ export default function RootLayout({
       <body className={`${inter.className} ${poppins.variable} antialiased`}>
         <AuthProvider>
           <ConversionRateProvider>
-            {children}
+            <PlatformFeesProvider>
+              {children}
+              <AIChatButton />
+            </PlatformFeesProvider>
           </ConversionRateProvider>
         </AuthProvider>
         <Analytics />

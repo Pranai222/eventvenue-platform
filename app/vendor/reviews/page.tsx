@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useEffect, useState } from "react"
 import { reviewsApi, ReviewData } from "@/lib/api/reviews"

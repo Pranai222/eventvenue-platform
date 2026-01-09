@@ -1,16 +1,19 @@
-"use client"
+﻿"use client"
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useAuth } from "@/lib/contexts/auth-context"
+import { useConversionRate } from "@/lib/contexts/conversion-rate-context"
 import { authApi } from "@/lib/api/auth"
 import { bookingsApi, type BookingData } from "@/lib/api/bookings"
 import { venuesApi, type VenueData } from "@/lib/api/venues"
+import { eventsApi } from "@/lib/api/events"
+import type { Event } from "@/lib/types/booking"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Coins, Calendar, MapPin, TrendingUp, ArrowRight, Ticket } from "lucide-react"
+import { Coins, Calendar, MapPin, TrendingUp, ArrowRight, Ticket, Star, Sparkles } from "lucide-react"
 
 interface UserProfile {
   id?: number
@@ -27,9 +30,12 @@ interface UserProfile {
 export default function UserDashboardPage() {
   const router = useRouter()
   const { user } = useAuth()
+  const { conversionRate } = useConversionRate()
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [bookings, setBookings] = useState<BookingData[]>([])
   const [featuredVenues, setFeaturedVenues] = useState<VenueData[]>([])
+  const [topVenues, setTopVenues] = useState<VenueData[]>([])
+  const [topEvents, setTopEvents] = useState<Event[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -41,7 +47,7 @@ export default function UserDashboardPage() {
 
     async function loadData() {
       try {
-        console.log("[EventVenue] UserDashboard - Loading data for user:", user.email)
+        console.log("[EventVenue] UserDashboard - Loading data for user:", user?.email)
 
         const profileResponse = await authApi.getUserProfile()
         const profileData = profileResponse as UserProfile
@@ -50,11 +56,29 @@ export default function UserDashboardPage() {
 
         const bookingsData = await bookingsApi.getUserBookings()
         console.log("[EventVenue] UserDashboard - Bookings loaded:", bookingsData.length)
-        setBookings(Array.isArray(bookingsData) ? bookingsData.slice(0, 3) : [])
+        setBookings(Array.isArray(bookingsData) ? bookingsData.slice(0, 3) as any : [])
 
         const venuesData = await venuesApi.getAll()
         console.log("[EventVenue] UserDashboard - Venues loaded:", venuesData.length)
-        setFeaturedVenues(Array.isArray(venuesData) ? venuesData.slice(0, 3) : [])
+        setFeaturedVenues(Array.isArray(venuesData) ? venuesData.slice(0, 3) as any : [])
+
+        // Get top-rated venues (sorted by rating descending)
+        const sortedVenues = Array.isArray(venuesData)
+          ? [...venuesData].sort((a, b) => (b.rating || 0) - (a.rating || 0)).slice(0, 3) as any
+          : []
+        setTopVenues(sortedVenues)
+
+        // Load and get top-rated events
+        try {
+          const eventsData = await eventsApi.getActive()
+          const sortedEvents = Array.isArray(eventsData)
+            ? [...eventsData].sort((a, b) => (b.rating || 0) - (a.rating || 0)).slice(0, 3)
+            : []
+          setTopEvents(sortedEvents)
+        } catch (e) {
+          console.log("[EventVenue] Failed to load events:", e)
+          setTopEvents([])
+        }
       } catch (error: any) {
         console.error("[EventVenue] UserDashboard - Error loading data:", error)
         const errorMessage = error?.message || "Failed to load dashboard data"
@@ -102,7 +126,7 @@ export default function UserDashboardPage() {
   }
 
   const points = profile?.points || 0
-  const pointsValue = (points / 100) * 10
+  const pointsValue = points / conversionRate
   const userName = profile?.firstName || profile?.username || "User"
 
   return (
@@ -120,7 +144,7 @@ export default function UserDashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{points.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">Worth ${pointsValue.toFixed(2)}</p>
+            <p className="text-xs text-muted-foreground">Worth ₹{pointsValue.toFixed(2)}</p>
           </CardContent>
         </Card>
 
@@ -147,6 +171,88 @@ export default function UserDashboardPage() {
             <p className="text-xs text-muted-foreground">All time</p>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Top Suggestions Section */}
+      <div>
+        <div className="flex items-center gap-2 mb-4">
+          <Sparkles className="h-5 w-5 text-amber-500" />
+          <h2 className="text-2xl font-semibold">Top Suggestions</h2>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-6">
+          {/* Top Rated Venues */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <MapPin className="h-4 w-4 text-primary" />
+                Top Rated Venues
+              </CardTitle>
+              <CardDescription>Highest rated venues for your next event</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {topVenues.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">No venues available</p>
+              ) : (
+                <div className="space-y-3">
+                  {topVenues.map((venue) => (
+                    <Link key={venue.id} href={`/venues/${venue.id}`}>
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors cursor-pointer">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm truncate">{venue.name}</p>
+                          <p className="text-xs text-muted-foreground">{venue.city}</p>
+                        </div>
+                        <div className="flex items-center gap-2 ml-2">
+                          <div className="flex items-center gap-1 text-amber-500">
+                            <Star className="h-3 w-3 fill-current" />
+                            <span className="text-sm font-medium">{(venue.rating || 0).toFixed(1)}</span>
+                          </div>
+                          <Badge variant="outline" className="text-xs">₹{venue.pricePerHour}/hr</Badge>
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Top Rated Events */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Ticket className="h-4 w-4 text-primary" />
+                Top Rated Events
+              </CardTitle>
+              <CardDescription>Popular events happening soon</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {topEvents.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">No events available</p>
+              ) : (
+                <div className="space-y-3">
+                  {topEvents.map((event) => (
+                    <Link key={event.id} href={`/events/${event.id}`}>
+                      <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors cursor-pointer">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm truncate">{event.name}</p>
+                          <p className="text-xs text-muted-foreground">{event.eventDate ? new Date(event.eventDate).toLocaleDateString() : 'Date not set'}</p>
+                        </div>
+                        <div className="flex items-center gap-2 ml-2">
+                          <div className="flex items-center gap-1 text-amber-500">
+                            <Star className="h-3 w-3 fill-current" />
+                            <span className="text-sm font-medium">{(event.rating || 0).toFixed(1)}</span>
+                          </div>
+                          <Badge variant="outline" className="text-xs">₹{event.pricePerTicket}</Badge>
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       <div>
@@ -197,7 +303,7 @@ export default function UserDashboardPage() {
                         >
                           {booking.status}
                         </Badge>
-                        <span className="text-sm text-muted-foreground">${booking.totalAmount.toFixed(2)}</span>
+                        <span className="text-sm text-muted-foreground">₹{booking.totalAmount.toFixed(2)}</span>
                       </div>
                     </div>
                   </div>
@@ -249,7 +355,7 @@ export default function UserDashboardPage() {
                 <CardContent>
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-2xl font-bold text-primary">${venue.pricePerHour}</p>
+                      <p className="text-2xl font-bold text-primary">₹{venue.pricePerHour}</p>
                       <p className="text-xs text-muted-foreground">per hour</p>
                     </div>
                     <Link href={`/venues/${venue.id}`}>

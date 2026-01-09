@@ -11,7 +11,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/credit-requests")
-@CrossOrigin(origins = "*")
+@CrossOrigin(origins = {"http://localhost:3000", "http://localhost:8000"})
 public class CreditRequestController {
 
     private final CreditRequestService creditRequestService;
@@ -28,9 +28,13 @@ public class CreditRequestController {
     @PostMapping("/submit")
     public ResponseEntity<?> submitRequest(@RequestBody Map<String, Object> request) {
         try {
+            System.out.println("[CreditRequest] Received request: " + request);
+            
             Long userId = Long.valueOf(request.get("userId").toString());
             Integer pointsRequested = Integer.valueOf(request.get("pointsRequested").toString());
             String reason = request.get("reason").toString();
+
+            System.out.println("[CreditRequest] userId: " + userId + ", points: " + pointsRequested + ", reason: " + reason);
 
             if (pointsRequested <= 0) {
                 Map<String, String> error = new HashMap<>();
@@ -45,6 +49,7 @@ public class CreditRequestController {
             }
 
             CreditRequest creditRequest = creditRequestService.submitRequest(userId, pointsRequested, reason);
+            System.out.println("[CreditRequest] Request saved with ID: " + creditRequest.getId());
             
             Map<String, Object> response = new HashMap<>();
             response.put("success", true);
@@ -66,9 +71,16 @@ public class CreditRequestController {
     @GetMapping("/user/{userId}")
     public ResponseEntity<?> getUserRequests(@PathVariable Long userId) {
         try {
+            System.out.println("[CreditRequest] GET /user/" + userId + " called");
             List<CreditRequest> requests = creditRequestService.getUserRequests(userId);
+            System.out.println("[CreditRequest] Found " + requests.size() + " requests for user " + userId);
+            for (CreditRequest r : requests) {
+                System.out.println("[CreditRequest]   - ID: " + r.getId() + ", Points: " + r.getPointsRequested() + ", Status: " + r.getStatus());
+            }
             return ResponseEntity.ok(requests);
         } catch (Exception e) {
+            System.out.println("[CreditRequest] ERROR: " + e.getMessage());
+            e.printStackTrace();
             Map<String, String> error = new HashMap<>();
             error.put("error", e.getMessage());
             return ResponseEntity.internalServerError().body(error);

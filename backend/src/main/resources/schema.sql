@@ -65,6 +65,9 @@ CREATE TABLE IF NOT EXISTS venues (
     is_available BOOLEAN DEFAULT TRUE,
     rating DECIMAL(3, 2) DEFAULT 0.00,
     total_bookings INT DEFAULT 0,
+    vendor_phone VARCHAR(20) NOT NULL,
+    edit_count INT DEFAULT 0,
+    is_edit_locked BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (vendor_id) REFERENCES vendors(id) ON DELETE CASCADE,
@@ -97,10 +100,18 @@ CREATE TABLE IF NOT EXISTS events (
     reschedule_reason TEXT,
     original_event_date DATETIME,
     original_location VARCHAR(255),
+    -- Rating fields (calculated from reviews)
+    rating DECIMAL(3, 2) DEFAULT 0.00,
+    review_count INT DEFAULT 0,
     -- Cancellation tracking fields
     is_cancelled BOOLEAN DEFAULT FALSE,
     cancellation_reason TEXT,
     cancelled_at TIMESTAMP,
+    -- Vendor contact phone (mandatory)
+    vendor_phone VARCHAR(20) NOT NULL,
+    -- Edit limit tracking
+    edit_count INT DEFAULT 0,
+    is_edit_locked BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (vendor_id) REFERENCES vendors(id) ON DELETE CASCADE,
@@ -108,7 +119,8 @@ CREATE TABLE IF NOT EXISTS events (
     KEY idx_event_date (event_date),
     KEY idx_is_active (is_active),
     KEY idx_is_cancelled (is_cancelled),
-    KEY idx_was_rescheduled (was_rescheduled)
+    KEY idx_was_rescheduled (was_rescheduled),
+    KEY idx_rating (rating)
 );
 
 
@@ -116,6 +128,7 @@ CREATE TABLE IF NOT EXISTS events (
 CREATE TABLE IF NOT EXISTS bookings (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     user_id BIGINT NOT NULL,
+    user_name VARCHAR(255),
     venue_id BIGINT,
     event_id BIGINT,
     booking_date DATE NOT NULL,
@@ -364,6 +377,42 @@ INSERT IGNORE INTO admin_users (email, password, name, role) VALUES
 INSERT IGNORE INTO system_settings (setting_key, setting_value, description) VALUES 
 ('points_per_dollar', '100', 'Points conversion rate: how many points equal 1 dollar');
 
+-- Withdrawal Requests Table (NO FOREIGN KEY - user_id can be from users OR vendors table)
+DROP TABLE IF EXISTS withdrawal_requests;
+CREATE TABLE withdrawal_requests (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    points_amount INT NOT NULL,
+    amount_usd DECIMAL(10, 2) NOT NULL,
+    status VARCHAR(50) DEFAULT 'PENDING',
+    stripe_payout_id VARCHAR(255),
+    admin_id BIGINT,
+    admin_notes TEXT,
+    requires_approval BOOLEAN DEFAULT FALSE,
+    card_last4 VARCHAR(4),
+    paypal_email VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    KEY idx_user_id (user_id),
+    KEY idx_status (status)
+);
+
+-- Credit Requests Table (NO FOREIGN KEY - user_id can be from users OR vendors table)
+DROP TABLE IF EXISTS credit_requests;
+CREATE TABLE credit_requests (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    points_requested INT NOT NULL,
+    reason TEXT,
+    status VARCHAR(50) DEFAULT 'PENDING',
+    admin_id BIGINT,
+    admin_notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    KEY idx_user_id (user_id),
+    KEY idx_status (status)
+);
+
 -- Insert Stripe conversion ratio setting
 INSERT IGNORE INTO system_settings (setting_key, setting_value, description) VALUES 
 ('points_to_dollar_ratio', '0.01', 'Conversion ratio: 100 points = $1 (0.01 means divide points by 100)');
@@ -371,3 +420,16 @@ INSERT IGNORE INTO system_settings (setting_key, setting_value, description) VAL
 -- Insert platform commission setting
 INSERT IGNORE INTO system_settings (setting_key, setting_value, description) VALUES 
 ('platform_commission_percentage', '5.0', 'Platform commission percentage on transactions');
+
+-- Platform fee settings
+INSERT IGNORE INTO system_settings (setting_key, setting_value, description) VALUES 
+('user_platform_fee_points', '2', 'Points added to user booking costs');
+
+INSERT IGNORE INTO system_settings (setting_key, setting_value, description) VALUES 
+('venue_creation_points', '10', 'Points deducted from vendor for venue creation');
+
+INSERT IGNORE INTO system_settings (setting_key, setting_value, description) VALUES 
+('event_creation_points_quantity', '10', 'Points deducted for creating quantity-based event');
+
+INSERT IGNORE INTO system_settings (setting_key, setting_value, description) VALUES 
+('event_creation_points_seat', '20', 'Points deducted for creating seat-selection event');

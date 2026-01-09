@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -25,6 +25,7 @@ export function AdminNav() {
     { href: "/admin/vendors", label: "Vendors" },
     { href: "/admin/bookings", label: "Bookings" },
     { href: "/admin/reviews", label: "Reviews" },
+    { href: "/admin/user-monitor", label: "User Monitor" },
     { href: "/admin/audit-logs", label: "Audit Logs" },
     { href: "/admin/settings", label: "Settings" },
   ]
@@ -67,6 +68,13 @@ export function AdminNav() {
                   <p className="text-xs leading-none text-muted-foreground">{user?.email}</p>
                 </div>
               </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <Link href="/admin/credit-requests">Credit Requests</Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/admin/withdrawals">Withdrawals</Link>
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
                 <Link href="/admin/settings">System Settings</Link>

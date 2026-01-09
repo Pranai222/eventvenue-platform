@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import type React from "react"
 
@@ -14,12 +14,14 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { ImageUpload } from "@/components/ImageUpload"
 import { AlertCircle, CheckCircle, Building2 } from "lucide-react"
 import LocationPicker from "@/components/location-picker"
+import { usePlatformFees } from "@/lib/contexts/platform-fees-context"
 
 export default function CreateVenuePage() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState(false)
+  const { platformFees } = usePlatformFees()
 
   const [formData, setFormData] = useState({
     name: "",
@@ -31,6 +33,7 @@ export default function CreateVenuePage() {
     pricePerHour: 0,
     amenities: "",
     images: [] as string[],
+    vendorPhone: "",
   })
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -52,6 +55,7 @@ export default function CreateVenuePage() {
         isAvailable: true,
         rating: 0,
         totalBookings: 0,
+        vendorPhone: formData.vendorPhone,
       }
 
       await venuesApi.create(venueData)
@@ -147,6 +151,19 @@ export default function CreateVenuePage() {
               required
             />
 
+            <div className="space-y-2">
+              <Label htmlFor="vendorPhone">Contact Phone Number *</Label>
+              <Input
+                id="vendorPhone"
+                type="tel"
+                placeholder="e.g., +91 98765 43210"
+                value={formData.vendorPhone}
+                onChange={(e) => setFormData({ ...formData, vendorPhone: e.target.value })}
+                required
+              />
+              <p className="text-xs text-muted-foreground">This will be shown to customers for contact purposes</p>
+            </div>
+
             <div className="grid md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="capacity">Capacity</Label>
@@ -162,7 +179,7 @@ export default function CreateVenuePage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="pricePerHour">Price Per Hour ($)</Label>
+                <Label htmlFor="pricePerHour">Price Per Hour (₹)</Label>
                 <Input
                   id="pricePerHour"
                   type="number"
@@ -208,7 +225,7 @@ export default function CreateVenuePage() {
                 </div>
                 <div className="text-right">
                   <div className="flex items-center gap-1">
-                    <span className="text-2xl font-bold text-primary">50</span>
+                    <span className="text-2xl font-bold text-primary">{platformFees.venueCreationPoints}</span>
                     <span className="text-sm text-muted-foreground">points</span>
                   </div>
                   <p className="text-xs text-muted-foreground">Deducted on creation</p>
@@ -223,7 +240,7 @@ export default function CreateVenuePage() {
 
             <div className="flex gap-4">
               <Button type="submit" disabled={isLoading}>
-                {isLoading ? "Creating..." : "Create Venue (50 pts)"}
+                {isLoading ? "Creating..." : `Create Venue (${platformFees.venueCreationPoints} pts)`}
               </Button>
               <Button type="button" variant="outline" onClick={() => router.back()}>
                 Cancel

@@ -1,4 +1,4 @@
-export default function PrivacyPage() {
+﻿export default function PrivacyPage() {
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-12 max-w-4xl">
@@ -84,7 +84,7 @@ export default function PrivacyPage() {
             <h2 className="text-2xl font-semibold mb-4">10. Contact Information</h2>
             <p className="text-muted-foreground mb-4">
               For privacy concerns or requests, contact us at privacy@eventvenue.com or our support team at
-              support@eventvenue.com. You can also reach us through our Help Center.
+              pranaib20@gmail.com. You can also reach us through our Help Center.
             </p>
           </section>
 

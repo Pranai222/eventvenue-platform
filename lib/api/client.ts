@@ -43,6 +43,9 @@ async function fetchWithAuth(endpoint: string, options: RequestInit = {}): Promi
     "/api/auth/resend-otp",
     "/api/health",
     "/api/admin/settings/conversion-rate",
+    "/api/admin/settings/platform-fees",
+    "/api/credit-requests",
+    "/api/withdrawals",
   ]
   const isPublicEndpoint = publicEndpoints.some((ep) => endpoint.includes(ep))
 
@@ -81,11 +84,16 @@ async function fetchWithAuth(endpoint: string, options: RequestInit = {}): Promi
       if (response.status === 401) {
         console.log("[EventVenue] API Client - 401 Unauthorized")
 
-        // Auto-logout and redirect for auth-related endpoints only (not events/bookings to prevent loops)
-        const authEndpoints = ["/api/auth/", "/api/user/", "/api/vendor/", "/api/admin/"]
+        // Auto-logout and redirect for core auth endpoints only
+        // Don't include events/bookings/venues as pages handle their own auth redirects
+        const authEndpoints = [
+          "/api/auth/",  // Auth endpoints
+          "/api/vendor/profile",  // Vendor profile endpoint
+          "/api/user/profile",    // User profile endpoint
+        ]
         const publicExceptions = ["/api/admin/settings/conversion-rate"] // These admin endpoints are public
 
-        const isAuthEndpoint = authEndpoints.some((ep: string) => endpoint.startsWith(ep))
+        const isAuthEndpoint = authEndpoints.some((ep: string) => endpoint.includes(ep))
         const isPublicException = publicExceptions.includes(endpoint)
 
         if (isAuthEndpoint && !isPublicException && typeof window !== "undefined") {

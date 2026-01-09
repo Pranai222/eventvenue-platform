@@ -14,6 +14,7 @@ import com.eventvenue.service.UserService;
 import com.eventvenue.service.VendorService;
 import com.eventvenue.service.AdminUserService;
 import com.eventvenue.service.OtpService;
+import com.eventvenue.service.EmailService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -44,6 +45,9 @@ public class AuthController {
 
     @Autowired
     private OtpService otpService;
+    
+    @Autowired
+    private EmailService emailService;
 
     // USER AUTHENTICATION
     @PostMapping("/user/signup")
@@ -76,7 +80,8 @@ public class AuthController {
     @PostMapping("/user/login")
     public ResponseEntity<ApiResponse> userLogin(@RequestBody AuthRequest request) {
         try {
-            Optional<User> userOptional = userService.findByEmail(request.getEmail());
+            // Find user by email AND role to support same email with different roles
+            Optional<User> userOptional = userService.findByEmailAndRole(request.getEmail(), "USER");
             
             if (userOptional.isEmpty() || !passwordEncoder.matches(request.getPassword(), userOptional.get().getPassword())) {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.builder()
@@ -211,7 +216,7 @@ public class AuthController {
 
             // Mark user/vendor as verified
             if ("USER".equals(request.getRole())) {
-                Optional<User> userOpt = userService.findByEmail(request.getEmail());
+                Optional<User> userOpt = userService.findByEmailAndRole(request.getEmail(), "USER");
                 if (userOpt.isPresent()) {
                     User user = userOpt.get();
                     user.setIsVerified(true);
@@ -243,6 +248,10 @@ public class AuthController {
                     Vendor vendor = vendorOpt.get();
                     vendor.setIsVerified(true);
                     vendorService.updateVendor(vendor);
+                    
+                    // Send vendor verification success email
+                    emailService.sendVendorVerificationSuccess(vendor.getEmail(), vendor.getBusinessName());
+                    System.out.println("[EventVenue] Vendor verification success email sent to: " + vendor.getEmail());
                     
                     // Generate token even though vendor is awaiting approval
                     String token = jwtTokenProvider.generateToken(vendor.getId(), vendor.getEmail(), "VENDOR");

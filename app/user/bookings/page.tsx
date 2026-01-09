@@ -1,8 +1,9 @@
-"use client"
+﻿"use client"
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { bookingsApi } from "@/lib/api/bookings"
+import { adminApi } from "@/lib/api/admin"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -34,6 +35,10 @@ interface CancelModalState {
 export default function UserBookingsPage() {
   const [bookings, setBookings] = useState<Booking[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [showAllActive, setShowAllActive] = useState(false)
+  const [showAllPast, setShowAllPast] = useState(false)
+  const [showAllCancelled, setShowAllCancelled] = useState(false)
+  const [conversionRate, setConversionRate] = useState(1) // Admin-set conversion rate
   const [cancelModal, setCancelModal] = useState<CancelModalState>({
     isOpen: false,
     booking: null,
@@ -42,55 +47,97 @@ export default function UserBookingsPage() {
   })
 
   useEffect(() => {
+    // Fetch bookings
     bookingsApi
       .getUserBookings()
       .then(setBookings)
       .catch(console.error)
       .finally(() => setIsLoading(false))
+
+    // Fetch conversion rate from admin settings
+    adminApi.getConversionRate()
+      .then((rate: { pointsPerDollar: number }) => {
+        setConversionRate(rate.pointsPerDollar || 1)
+        console.log("[Bookings] Conversion rate:", rate.pointsPerDollar)
+      })
+      .catch((err: Error) => {
+        console.error("[Bookings] Failed to fetch conversion rate:", err)
+        setConversionRate(1) // Default to 1
+      })
   }, [])
 
-  const activeBookings = bookings.filter((b) => b.status === "CONFIRMED" || b.status === "PENDING")
-  const pastBookings = bookings.filter((b) => b.status === "COMPLETED")
-  const cancelledBookings = bookings.filter((b) => b.status === "CANCELLED")
+  // Sort helper function - newest first
+  const sortByNewest = (a: Booking, b: Booking) => {
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  }
+
+  const activeBookings = bookings
+    .filter((b) => b.status === "CONFIRMED" || b.status === "PENDING")
+    .sort(sortByNewest)
+  const pastBookings = bookings
+    .filter((b) => b.status === "COMPLETED")
+    .sort(sortByNewest)
+  const cancelledBookings = bookings
+    .filter((b) => b.status === "CANCELLED")
+    .sort(sortByNewest)
+
+  // Pagination - show only 10 items unless showAll is true
+  const ITEMS_PER_PAGE = 10
+  const displayedActiveBookings = showAllActive ? activeBookings : activeBookings.slice(0, ITEMS_PER_PAGE)
+  const displayedPastBookings = showAllPast ? pastBookings : pastBookings.slice(0, ITEMS_PER_PAGE)
+  const displayedCancelledBookings = showAllCancelled ? cancelledBookings : cancelledBookings.slice(0, ITEMS_PER_PAGE)
 
   const getRefundInfo = (booking: Booking) => {
     const isVenueBooking = booking.venueId !== undefined && booking.venueId !== null
-    const bookingDate = new Date(booking.startDate || booking.bookingDate)
+    const bookingDate = new Date(booking.startDate || booking.bookingDate || new Date())
     const today = new Date()
     const daysUntil = Math.ceil((bookingDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
 
+    // NEW REFUND POLICY:
+    // Points refund = (refund percentage) × (total booking amount) × (conversion rate)
+    // Example: 75% of ₹80 total with rate=1 = 60 points refunded
+    // NO cash/PayPal refund - only points based on total value
+
     if (isVenueBooking) {
       if (daysUntil >= 2) {
+        // 100% refund - 2+ days in advance
+        const pointsRefund = Math.floor(booking.totalAmount * conversionRate)
         return {
           percentage: 100,
           amount: booking.totalAmount,
-          pointsRefund: booking.pointsUsed || 0,
+          pointsRefund: pointsRefund,
           message: `Cancelling ${daysUntil} days before booking`,
           hasRefund: true
         }
       } else {
+        // 75% refund - less than 2 days
+        const pointsRefund = Math.floor(booking.totalAmount * 0.75 * conversionRate)
         return {
-          percentage: 25,
-          amount: booking.totalAmount * 0.25,
-          pointsRefund: Math.floor((booking.pointsUsed || 0) * 0.25),
+          percentage: 75,
+          amount: booking.totalAmount * 0.75,
+          pointsRefund: pointsRefund,
           message: `Cancelling less than 2 days before booking`,
           hasRefund: true
         }
       }
     } else {
       if (daysUntil >= 2) {
+        // 100% refund - 2+ days in advance
+        const pointsRefund = Math.floor(booking.totalAmount * conversionRate)
         return {
           percentage: 100,
           amount: booking.totalAmount,
-          pointsRefund: booking.pointsUsed || 0,
+          pointsRefund: pointsRefund,
           message: `Cancelling ${daysUntil} days before event`,
           hasRefund: true
         }
       } else {
+        // 75% refund - less than 2 days
+        const pointsRefund = Math.floor(booking.totalAmount * 0.75 * conversionRate)
         return {
-          percentage: 25,
-          amount: booking.totalAmount * 0.25,
-          pointsRefund: Math.floor((booking.pointsUsed || 0) * 0.25),
+          percentage: 75,
+          amount: booking.totalAmount * 0.75,
+          pointsRefund: pointsRefund,
           message: `Cancelling less than 2 days before event`,
           hasRefund: true
         }
@@ -175,7 +222,7 @@ export default function UserBookingsPage() {
                   </Badge>
                 </div>
                 <div className="text-right">
-                  <p className="text-2xl font-bold">${booking.totalAmount.toFixed(2)}</p>
+                  <p className="text-2xl font-bold">₹{booking.totalAmount.toFixed(2)}</p>
                   {booking.pointsUsed > 0 && (
                     <p className="text-xs text-muted-foreground">{booking.pointsUsed} points used</p>
                   )}
@@ -190,6 +237,15 @@ export default function UserBookingsPage() {
                     {booking.endDate && ` - ${new Date(booking.endDate).toLocaleDateString()}`}
                   </span>
                 </div>
+                {/* Seat info for seat-selection events */}
+                {booking.seatCount && booking.seatCount > 0 && (
+                  <div className="flex items-center gap-2 text-primary">
+                    <span className="font-medium">{booking.seatCount} seat{booking.seatCount > 1 ? 's' : ''}</span>
+                    {booking.seatLabels && (
+                      <span className="text-muted-foreground">({booking.seatLabels})</span>
+                    )}
+                  </div>
+                )}
                 <p className="text-xs">Booked on {new Date(booking.createdAt).toLocaleDateString()}</p>
               </div>
 
@@ -252,7 +308,19 @@ export default function UserBookingsPage() {
               </CardContent>
             </Card>
           ) : (
-            activeBookings.map((booking) => <BookingCard key={booking.id} booking={booking} />)
+            <>
+              {displayedActiveBookings.map((booking) => <BookingCard key={booking.id} booking={booking} />)}
+              {activeBookings.length > ITEMS_PER_PAGE && (
+                <div className="flex justify-center mt-4">
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowAllActive(!showAllActive)}
+                  >
+                    {showAllActive ? 'Show Less' : `View All (${activeBookings.length})`}
+                  </Button>
+                </div>
+              )}
+            </>
           )}
         </TabsContent>
 
@@ -265,7 +333,19 @@ export default function UserBookingsPage() {
               </CardContent>
             </Card>
           ) : (
-            pastBookings.map((booking) => <BookingCard key={booking.id} booking={booking} />)
+            <>
+              {displayedPastBookings.map((booking) => <BookingCard key={booking.id} booking={booking} />)}
+              {pastBookings.length > ITEMS_PER_PAGE && (
+                <div className="flex justify-center mt-4">
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowAllPast(!showAllPast)}
+                  >
+                    {showAllPast ? 'Show Less' : `View All (${pastBookings.length})`}
+                  </Button>
+                </div>
+              )}
+            </>
           )}
         </TabsContent>
 
@@ -278,7 +358,19 @@ export default function UserBookingsPage() {
               </CardContent>
             </Card>
           ) : (
-            cancelledBookings.map((booking) => <BookingCard key={booking.id} booking={booking} />)
+            <>
+              {displayedCancelledBookings.map((booking) => <BookingCard key={booking.id} booking={booking} />)}
+              {cancelledBookings.length > ITEMS_PER_PAGE && (
+                <div className="flex justify-center mt-4">
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowAllCancelled(!showAllCancelled)}
+                  >
+                    {showAllCancelled ? 'Show Less' : `View All (${cancelledBookings.length})`}
+                  </Button>
+                </div>
+              )}
+            </>
           )}
         </TabsContent>
       </Tabs>
@@ -324,13 +416,13 @@ export default function UserBookingsPage() {
 
                   <div className="flex justify-between items-center">
                     <span className="text-sm">Original Amount</span>
-                    <span className="font-medium">${cancelModal.booking.totalAmount.toFixed(2)}</span>
+                    <span className="font-medium">₹{cancelModal.booking.totalAmount.toFixed(2)}</span>
                   </div>
 
                   <div className="flex justify-between items-center">
                     <span className="text-sm">Refund ({refundInfo.percentage}%)</span>
                     <span className={`font-bold ${refundInfo.hasRefund ? 'text-green-600' : 'text-red-600'}`}>
-                      ${refundInfo.amount.toFixed(2)}
+                      ₹{refundInfo.amount.toFixed(2)}
                     </span>
                   </div>
 
@@ -380,7 +472,7 @@ export default function UserBookingsPage() {
                 <div className="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
                   <p className="text-green-800 font-medium mb-2">Refund Processed</p>
                   <p className="text-3xl font-bold text-green-700">
-                    ${cancelModal.result.refundAmount.toFixed(2)}
+                    ₹{cancelModal.result.refundAmount.toFixed(2)}
                   </p>
                   <p className="text-sm text-green-600 mt-1">
                     {cancelModal.result.refundPercentage}% of original amount

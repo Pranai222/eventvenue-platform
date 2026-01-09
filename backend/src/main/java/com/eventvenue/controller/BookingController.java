@@ -49,9 +49,8 @@ public class BookingController {
     @PostMapping
     public ResponseEntity<ApiResponse> createBooking(@RequestBody Booking booking, Authentication authentication) {
         try {
-            String email = authentication.getName();
-            // The JWT should set principal to user ID, or we need to look up by email
-            Long userId = Long.parseLong(authentication.getPrincipal().toString());
+            // The JWT filter sets userId as the principal (via getName())
+            Long userId = Long.parseLong(authentication.getName());
             booking.setUserId(userId);
             Booking createdBooking = bookingService.createBooking(booking);
             
@@ -73,7 +72,7 @@ public class BookingController {
             @RequestBody Map<String, Object> bookingRequest,
             Authentication authentication) {
         try {
-            Long userId = Long.parseLong(authentication.getPrincipal().toString());
+            Long userId = Long.parseLong(authentication.getName());
             
             Long venueId = bookingRequest.get("venueId") != null ? 
                 Long.valueOf(bookingRequest.get("venueId").toString()) : null;
@@ -89,9 +88,23 @@ public class BookingController {
             Integer quantity = bookingRequest.get("quantity") != null ? 
                 Integer.valueOf(bookingRequest.get("quantity").toString()) : 1;
             
+            // Hybrid payment support
+            Integer pointsToUse = bookingRequest.get("pointsToUse") != null ? 
+                Integer.valueOf(bookingRequest.get("pointsToUse").toString()) : null;
+            String paypalTransactionId = bookingRequest.get("paypalTransactionId") != null ? 
+                bookingRequest.get("paypalTransactionId").toString() : null;
+            Double remainingAmount = bookingRequest.get("remainingAmount") != null ? 
+                Double.valueOf(bookingRequest.get("remainingAmount").toString()) : 0.0;
+            
+            // IMPORTANT: Use totalAmount from frontend to maintain consistency with what user saw
+            Double totalAmount = bookingRequest.get("totalAmount") != null ? 
+                Double.valueOf(bookingRequest.get("totalAmount").toString()) : null;
+            
             Booking createdBooking = bookingService.createBookingWithPoints(
-                userId, venueId, eventId, bookingDate, checkInTime, checkOutTime, durationHours, quantity
+                userId, venueId, eventId, bookingDate, checkInTime, checkOutTime, durationHours, quantity,
+                pointsToUse, paypalTransactionId, remainingAmount, totalAmount
             );
+
             
             return ResponseEntity.ok(ApiResponse.builder()
                     .success(true)
@@ -127,9 +140,10 @@ public class BookingController {
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse> getBooking(@PathVariable Long id) {
         try {
-            Optional<Booking> bookingOptional = bookingService.getBookingById(id);
+            // Use enriched method that includes seat info for seat-based bookings
+            var bookingDTO = bookingService.getBookingByIdWithSeatInfo(id);
             
-            if (bookingOptional.isEmpty()) {
+            if (bookingDTO == null) {
                 return ResponseEntity.badRequest().body(ApiResponse.builder()
                         .success(false)
                         .message("Booking not found")
@@ -139,7 +153,7 @@ public class BookingController {
             return ResponseEntity.ok(ApiResponse.builder()
                     .success(true)
                     .message("Booking retrieved successfully")
-                    .data(bookingOptional.get())
+                    .data(bookingDTO)
                     .build());
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(ApiResponse.builder()
@@ -152,8 +166,9 @@ public class BookingController {
     @GetMapping("/my-bookings")
     public ResponseEntity<ApiResponse> getMyBookings(Authentication authentication) {
         try {
-            Long userId = Long.parseLong(authentication.getPrincipal().toString());
-            List<Booking> bookings = bookingService.getBookingsByUser(userId);
+            Long userId = Long.parseLong(authentication.getName());
+            // Use enriched method that includes seat info for seat-based bookings
+            var bookings = bookingService.getBookingsByUserWithSeatInfo(userId);
             
             return ResponseEntity.ok(ApiResponse.builder()
                     .success(true)
@@ -176,7 +191,7 @@ public class BookingController {
     @GetMapping("/vendor/my-bookings")
     public ResponseEntity<ApiResponse> getVendorBookings(Authentication authentication) {
         try {
-            Long vendorId = Long.parseLong(authentication.getPrincipal().toString());
+            Long vendorId = Long.parseLong(authentication.getName());
             List<Booking> bookings = bookingService.getBookingsByVendor(vendorId);
             
             return ResponseEntity.ok(ApiResponse.builder()

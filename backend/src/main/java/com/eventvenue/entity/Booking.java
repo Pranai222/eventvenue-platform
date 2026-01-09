@@ -22,6 +22,9 @@ public class Booking {
     @Column(nullable = false)
     private Long userId;
 
+    // Store user name at booking time for display
+    private String userName;
+
     private Long venueId;
     private Long eventId;
 
@@ -59,6 +62,13 @@ public class Booking {
     private BigDecimal refundAmount;
     private Integer refundPercentage;
     private LocalDateTime cancelledAt;
+    
+    // Hybrid payment: PayPal transaction for remaining amount
+    @Column(name = "paypal_transaction_id")
+    private String paypalTransactionId;
+    
+    @Column(name = "remaining_amount")
+    private BigDecimal remainingAmount;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

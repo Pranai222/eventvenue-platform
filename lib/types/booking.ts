@@ -13,13 +13,21 @@ export interface VenueData {
   isAvailable: boolean
   rating: number
   totalBookings: number
+  vendorPhone: string
+  editCount?: number
+  isEditLocked?: boolean
   createdAt?: string
   updatedAt?: string
+  // Vendor business info from DTO
+  vendorBusinessName?: string
+  vendorBusinessPhone?: string
+  vendorEmail?: string
 }
 
 export interface BookingData {
   id: number
   userId: number
+  userName?: string
   venueId?: number
   eventId?: number
   bookingDate: string
@@ -54,6 +62,13 @@ export interface Venue {
   rating: number
   reviewCount: number // Maps to totalBookings for now
   totalBookings: number
+  vendorPhone: string
+  editCount?: number
+  isEditLocked?: boolean
+  // Vendor business info from DTO
+  vendorBusinessName?: string
+  vendorBusinessPhone?: string
+  vendorEmail?: string
 }
 
 export interface Event {
@@ -76,10 +91,19 @@ export interface Event {
   status: "DRAFT" | "PUBLISHED" // Derived from isActive
   isActive: boolean // Backend field name
   featured?: boolean // Frontend only flag
+  rating?: number // Average rating from reviews
+  reviewCount?: number // Number of reviews
   images: string[] // Frontend converts from backend string
   ticketTypes: TicketType[] // Frontend only - for display purposes
+  vendorPhone: string
+  editCount?: number
+  isEditLocked?: boolean
   createdAt?: string
   updatedAt?: string
+  // Vendor business info from DTO
+  vendorBusinessName?: string
+  vendorBusinessPhone?: string
+  vendorEmail?: string
 }
 
 export interface TicketType {
@@ -93,6 +117,8 @@ export interface TicketType {
 export interface Booking {
   id: number
   userId: number
+  userName?: string // Stored at booking time
+  userEmail?: string
   venueId?: number
   eventId?: number
   bookingDate: string // LocalDate from backend
@@ -101,12 +127,16 @@ export interface Booking {
   checkInTime?: string
   checkOutTime?: string
   durationHours?: number
+  quantity?: number // For event tickets
   totalAmount: number
   pointsUsed: number
   status: "PENDING" | "CONFIRMED" | "CANCELLED" | "COMPLETED"
   paymentStatus?: string
-  createdAt: string
+  createdAt?: string
   updatedAt?: string
+  // Seat info for seat-selection events
+  seatLabels?: string    // e.g., "A1, A2, B3"
+  seatCount?: number     // Number of seats booked
 }
 
 export interface Review {

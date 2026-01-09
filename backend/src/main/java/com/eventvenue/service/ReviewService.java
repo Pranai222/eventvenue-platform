@@ -278,8 +278,10 @@ public class ReviewService {
         Optional<Event> eventOptional = eventRepository.findById(eventId);
         if (eventOptional.isPresent()) {
             Double avgRating = getEventAverageRating(eventId);
+            List<Review> reviews = reviewRepository.findByEventId(eventId);
             Event event = eventOptional.get();
-            // Event entity may not have rating field - check first
+            event.setRating(avgRating);
+            event.setReviewCount(reviews.size());
             eventRepository.save(event);
         }
     }

@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
@@ -26,6 +26,7 @@ export default function PointsHistoryPage() {
     const { user } = useAuth()
     const { conversionRate } = useConversionRate()
     const [history, setHistory] = useState<PointHistory[]>([])
+    const [creditRequests, setCreditRequests] = useState<any[]>([])
     const [filteredHistory, setFilteredHistory] = useState<PointHistory[]>([])
     const [displayedHistory, setDisplayedHistory] = useState<PointHistory[]>([])
     const [isLoading, setIsLoading] = useState(true)
@@ -39,7 +40,7 @@ export default function PointsHistoryPage() {
 
     useEffect(() => {
         filterHistory()
-    }, [history, searchTerm, filterType])
+    }, [history, creditRequests, searchTerm, filterType])
 
     useEffect(() => {
         // Show only top 10 or all based on showAll state
@@ -55,6 +56,34 @@ export default function PointsHistoryPage() {
             const data = await pointsApi.getHistory()
             // Data is already sorted by createdAt DESC from backend
             setHistory(data)
+
+            // Also fetch credit requests
+            try {
+                const token = localStorage.getItem('auth_token')
+                const userProfile = await fetch('http://localhost:8080/api/user/profile', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                })
+                if (userProfile.ok) {
+                    const profile = await userProfile.json()
+                    const userId = profile.id || profile.userId
+                    console.log('[PointsHistory] Fetching credit requests for userId:', userId)
+                    if (userId) {
+                        const crResponse = await fetch(`http://localhost:8080/api/credit-requests/user/${userId}`, {
+                            headers: { 'Authorization': `Bearer ${token}` }
+                        })
+                        console.log('[PointsHistory] Credit requests response status:', crResponse.status)
+                        if (crResponse.ok) {
+                            const crData = await crResponse.json()
+                            console.log('[PointsHistory] Credit requests data:', crData)
+                            setCreditRequests(Array.isArray(crData) ? crData : [])
+                        } else {
+                            console.log('[PointsHistory] Credit requests fetch failed:', crResponse.statusText)
+                        }
+                    }
+                }
+            } catch (e) {
+                console.log('[PointsHistory] Error fetching credit requests:', e)
+            }
         } catch (error) {
             console.error("Failed to load points history:", error)
         } finally {
@@ -63,14 +92,40 @@ export default function PointsHistoryPage() {
     }
 
     const filterHistory = () => {
-        let filtered = history
+        // Convert credit requests to PointHistory format
+        const requestsAsHistory: PointHistory[] = creditRequests.map(cr => ({
+            id: cr.id + 1000000, // Offset to avoid ID collision
+            userId: cr.userId,
+            pointsChanged: cr.pointsRequested, // Always show the requested points
+            previousPoints: 0,
+            newPoints: cr.status === 'APPROVED' ? cr.pointsRequested : 0,
+            reason: cr.status === 'APPROVED'
+                ? `Credit Request Approved`
+                : cr.status === 'PENDING'
+                    ? `Credit Request Pending`
+                    : `Credit Request ${cr.status}`,
+            createdAt: cr.createdAt,
+            _isRequest: true,
+            _requestStatus: cr.status,
+            _requestPoints: cr.pointsRequested
+        } as any))
+
+        // Merge history and requests
+        let merged = [...history, ...requestsAsHistory]
+
+        // Sort by date DESC
+        merged.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+
+        let filtered = merged
 
         // Filter by type
         if (filterType !== "all") {
             if (filterType === "earned") {
-                filtered = filtered.filter(h => h.pointsChanged > 0)
+                filtered = filtered.filter(h => h.pointsChanged > 0 && !(h as any)._isRequest)
             } else if (filterType === "spent") {
                 filtered = filtered.filter(h => h.pointsChanged < 0)
+            } else if (filterType === "requested") {
+                filtered = filtered.filter(h => (h as any)._isRequest)
             }
         }
 
@@ -247,6 +302,7 @@ export default function PointsHistoryPage() {
                                 <SelectItem value="all">All Transactions</SelectItem>
                                 <SelectItem value="earned">Points Earned</SelectItem>
                                 <SelectItem value="spent">Points Spent</SelectItem>
+                                <SelectItem value="requested">Credit Requests</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
@@ -349,17 +405,40 @@ export default function PointsHistoryPage() {
                                         </div>
                                     </div>
                                     <div className="text-right">
-                                        <div className={`text-2xl font-bold flex items-center gap-1 ${item.pointsChanged > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                            {item.pointsChanged > 0 ? (
-                                                <TrendingUp className="h-5 w-5" />
-                                            ) : (
-                                                <TrendingDown className="h-5 w-5" />
-                                            )}
-                                            {item.pointsChanged > 0 ? '+' : ''}{item.pointsChanged.toLocaleString()}
-                                        </div>
-                                        <Badge variant="outline" className="mt-1">
-                                            {item.pointsChanged > 0 ? 'Earned' : 'Spent'}
-                                        </Badge>
+                                        {(item as any)._isRequest ? (
+                                            // Credit Request display
+                                            <>
+                                                <div className={`text-2xl font-bold flex items-center justify-end gap-1 ${(item as any)._requestStatus === 'APPROVED' ? 'text-green-600' : 'text-yellow-600'}`}>
+                                                    {(item as any)._requestStatus === 'APPROVED' ? (
+                                                        <TrendingUp className="h-5 w-5" />
+                                                    ) : (
+                                                        <Clock className="h-5 w-5" />
+                                                    )}
+                                                    +{((item as any)._requestPoints || item.pointsChanged).toLocaleString()}
+                                                </div>
+                                                <Badge
+                                                    variant="outline"
+                                                    className={`mt-1 ${(item as any)._requestStatus === 'APPROVED' ? 'bg-green-100 text-green-700 border-green-300' : (item as any)._requestStatus === 'PENDING' ? 'bg-yellow-100 text-yellow-700 border-yellow-300' : 'bg-red-100 text-red-700 border-red-300'}`}
+                                                >
+                                                    {(item as any)._requestStatus === 'APPROVED' ? 'Approved' : (item as any)._requestStatus === 'PENDING' ? 'Requested' : 'Rejected'}
+                                                </Badge>
+                                            </>
+                                        ) : (
+                                            // Regular transaction display
+                                            <>
+                                                <div className={`text-2xl font-bold flex items-center gap-1 ${item.pointsChanged > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                    {item.pointsChanged > 0 ? (
+                                                        <TrendingUp className="h-5 w-5" />
+                                                    ) : (
+                                                        <TrendingDown className="h-5 w-5" />
+                                                    )}
+                                                    {item.pointsChanged > 0 ? '+' : ''}{item.pointsChanged.toLocaleString()}
+                                                </div>
+                                                <Badge variant="outline" className="mt-1">
+                                                    {item.pointsChanged > 0 ? 'Earned' : 'Spent'}
+                                                </Badge>
+                                            </>
+                                        )}
                                     </div>
                                 </div>
                             ))}

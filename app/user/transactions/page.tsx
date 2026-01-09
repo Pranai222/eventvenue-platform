@@ -183,7 +183,7 @@ export default function TransactionsPage() {
                             </div>
                             <div>
                                 <CardTitle className="text-2xl">Buy Credits</CardTitle>
-                                <CardDescription className="text-base">Instant purchase with card</CardDescription>
+                                <CardDescription className="text-base">Instant purchase with PayPal</CardDescription>
                             </div>
                         </div>
                     </CardHeader>
@@ -194,7 +194,7 @@ export default function TransactionsPage() {
                                     <Shield className="h-4 w-4" />
                                     Payment Method
                                 </span>
-                                <span className="font-medium">Credit/Debit Card</span>
+                                <span className="font-medium">PayPal</span>
                             </div>
                             <div className="flex justify-between items-center">
                                 <span className="text-muted-foreground flex items-center gap-2">
@@ -205,7 +205,7 @@ export default function TransactionsPage() {
                             </div>
                             <div className="flex justify-between items-center">
                                 <span className="text-muted-foreground">Powered by</span>
-                                <span className="font-semibold text-primary">Stripe</span>
+                                <span className="font-semibold text-primary">PayPal</span>
                             </div>
                         </div>
                         <Button
@@ -288,7 +288,7 @@ export default function TransactionsPage() {
                             <h4 className="font-semibold text-blue-900 dark:text-blue-100">Purchase</h4>
                         </div>
                         <p className="text-sm text-blue-700 dark:text-blue-300">
-                            Buy points instantly using your credit card via secure Stripe payment
+                            Buy points instantly using PayPal secure payment
                         </p>
                     </div>
                     <div className="space-y-2">

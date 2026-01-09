@@ -1,10 +1,11 @@
-"use client"
+﻿"use client"
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useAuth } from "@/lib/contexts/auth-context"
 import { authApi } from "@/lib/api/auth"
 import { useConversionRate } from "@/lib/contexts/conversion-rate-context"
+import { usePlatformFees } from "@/lib/contexts/platform-fees-context"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -35,9 +36,20 @@ interface VendorProfile {
     points?: number
 }
 
+interface Transaction {
+    id: number
+    type: string
+    points: number
+    amount?: number
+    description: string
+    status: string
+    createdAt: string
+}
+
 export default function VendorTransactionsPage() {
     const { user } = useAuth()
     const { conversionRate } = useConversionRate()
+    const { platformFees } = usePlatformFees()
     const [profile, setProfile] = useState<VendorProfile | null>(null)
     const [isLoading, setIsLoading] = useState(true)
     const [showBuyModal, setShowBuyModal] = useState(false)
@@ -46,6 +58,9 @@ export default function VendorTransactionsPage() {
     const [withdrawLoading, setWithdrawLoading] = useState(false)
     const [withdrawSuccess, setWithdrawSuccess] = useState(false)
     const [withdrawError, setWithdrawError] = useState("")
+    const [paypalEmail, setPaypalEmail] = useState("")
+    const [transactions, setTransactions] = useState<Transaction[]>([])
+    const [showAllTransactions, setShowAllTransactions] = useState(false)
 
     useEffect(() => {
         loadData()
@@ -55,6 +70,25 @@ export default function VendorTransactionsPage() {
         try {
             const profileData = await authApi.getVendorProfile()
             setProfile(profileData as VendorProfile)
+
+            // Load transaction history
+            const vendorId = (profileData as any)?.vendorId || (profileData as any)?.id
+            if (vendorId) {
+                try {
+                    const token = localStorage.getItem('auth_token')
+                    const txResponse = await fetch(`http://localhost:8080/api/vendor/transactions/${vendorId}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    })
+                    if (txResponse.ok) {
+                        const txData = await txResponse.json()
+                        // Handle different API response structures
+                        const txList = txData.data || txData.transactions || txData || []
+                        setTransactions(Array.isArray(txList) ? txList : [])
+                    }
+                } catch (e) {
+                    console.log('No transactions found')
+                }
+            }
         } catch (error) {
             console.error("Failed to load data:", error)
         } finally {
@@ -84,26 +118,57 @@ export default function VendorTransactionsPage() {
             setWithdrawError("Insufficient points")
             return
         }
+        if (!paypalEmail || !paypalEmail.includes('@')) {
+            setWithdrawError("Please enter a valid PayPal email address")
+            return
+        }
 
         setWithdrawLoading(true)
         setWithdrawError("")
 
         try {
-            // Simulate withdrawal API call
-            await new Promise(resolve => setTimeout(resolve, 2000))
+            const token = localStorage.getItem('auth_token')
+            const response = await fetch('http://localhost:8080/api/withdrawals/submit', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    userId: profile?.vendorId || profile?.id,
+                    pointsAmount: pointsToWithdraw,
+                    paypalEmail: paypalEmail
+                })
+            })
 
-            // In production, call actual API
-            // await api.withdrawPoints(pointsToWithdraw)
+            const data = await response.json()
 
-            setWithdrawSuccess(true)
-            setTimeout(() => {
-                setShowWithdrawModal(false)
-                setWithdrawSuccess(false)
-                setWithdrawAmount("")
-                refreshData()
-            }, 2000)
-        } catch (error) {
-            setWithdrawError("Failed to process withdrawal. Please try again.")
+            if (!response.ok) {
+                // Handle HTTP error responses (4xx, 5xx)
+                setWithdrawError(data.error || data.message || `Server error: ${response.status}`)
+                return
+            }
+
+            if (data.success) {
+                setWithdrawSuccess(true)
+                // Check if requires approval
+                const requiresApproval = data.withdrawal?.requiresApproval
+                setTimeout(() => {
+                    setShowWithdrawModal(false)
+                    setWithdrawSuccess(false)
+                    setWithdrawAmount("")
+                    setPaypalEmail("")
+                    refreshData()
+                    if (requiresApproval) {
+                        alert("Your withdrawal request for more than 10,000 points has been submitted for admin approval. You will receive an email once approved.")
+                    }
+                }, 2000)
+            } else {
+                setWithdrawError(data.error || data.message || "Failed to process withdrawal")
+            }
+        } catch (error: any) {
+            console.error('[Withdraw] Error:', error)
+            setWithdrawError(error.message || "Failed to process withdrawal. Please try again.")
         } finally {
             setWithdrawLoading(false)
         }
@@ -231,7 +296,7 @@ export default function VendorTransactionsPage() {
                             </div>
                             <div className="flex justify-between items-center">
                                 <span className="text-muted-foreground">Powered by</span>
-                                <span className="font-semibold text-emerald-600">Stripe</span>
+                                <span className="font-semibold text-emerald-600">PayPal</span>
                             </div>
                         </div>
                         <Button
@@ -356,23 +421,117 @@ export default function VendorTransactionsPage() {
                                 <Building2 className="h-6 w-6 text-orange-600" />
                                 <span className="font-semibold">Create Venue</span>
                             </div>
-                            <p className="text-2xl font-bold text-orange-600">10 Points</p>
+                            <p className="text-2xl font-bold text-orange-600">{platformFees.venueCreationPoints} Points</p>
                         </div>
                         <div className="p-4 bg-white dark:bg-gray-900 rounded-xl border-2 border-orange-200 dark:border-orange-800">
                             <div className="flex items-center gap-3 mb-2">
                                 <Activity className="h-6 w-6 text-orange-600" />
                                 <span className="font-semibold">Event (Quantity)</span>
                             </div>
-                            <p className="text-2xl font-bold text-orange-600">10 Points</p>
+                            <p className="text-2xl font-bold text-orange-600">{platformFees.eventCreationPointsQuantity} Points</p>
                         </div>
                         <div className="p-4 bg-white dark:bg-gray-900 rounded-xl border-2 border-orange-200 dark:border-orange-800">
                             <div className="flex items-center gap-3 mb-2">
                                 <Zap className="h-6 w-6 text-orange-600" />
                                 <span className="font-semibold">Event (Seat-based)</span>
                             </div>
-                            <p className="text-2xl font-bold text-orange-600">20 Points</p>
+                            <p className="text-2xl font-bold text-orange-600">{platformFees.eventCreationPointsSeat} Points</p>
                         </div>
                     </div>
+                </CardContent>
+            </Card>
+
+            {/* Transaction History */}
+            <Card className="mb-8 border-2">
+                <CardHeader className="flex flex-row items-center justify-between">
+                    <div>
+                        <CardTitle className="text-xl flex items-center gap-2">
+                            <History className="h-5 w-5 text-purple-600" />
+                            Transaction History
+                        </CardTitle>
+                        <CardDescription>Your recent point transactions</CardDescription>
+                    </div>
+                    {transactions.length > 3 && !showAllTransactions && (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShowAllTransactions(true)}
+                            className="flex items-center gap-1"
+                        >
+                            View All ({transactions.length})
+                            <ChevronRight className="h-4 w-4" />
+                        </Button>
+                    )}
+                    {showAllTransactions && (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShowAllTransactions(false)}
+                        >
+                            Show Less
+                        </Button>
+                    )}
+                </CardHeader>
+                <CardContent>
+                    {transactions.length === 0 ? (
+                        <div className="text-center py-8 text-muted-foreground">
+                            <History className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                            <p>No transactions yet</p>
+                            <p className="text-sm">Your point transactions will appear here</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-3">
+                            {(showAllTransactions ? transactions : transactions.slice(0, 3)).map((tx, index) => (
+                                <div
+                                    key={tx.id || index}
+                                    className="flex items-center justify-between p-4 rounded-xl border bg-muted/30 hover:bg-muted/50 transition"
+                                >
+                                    <div className="flex items-center gap-4">
+                                        <div className={`p-2 rounded-full ${tx.points > 0
+                                            ? 'bg-green-100 dark:bg-green-900/30'
+                                            : 'bg-red-100 dark:bg-red-900/30'
+                                            }`}>
+                                            {tx.points > 0 ? (
+                                                <ArrowDownRight className="h-5 w-5 text-green-600" />
+                                            ) : (
+                                                <ArrowUpRight className="h-5 w-5 text-red-600" />
+                                            )}
+                                        </div>
+                                        <div>
+                                            <p className="font-medium">{tx.description || tx.type || 'Transaction'}</p>
+                                            <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                                <Clock className="h-3 w-3" />
+                                                {new Date(tx.createdAt).toLocaleDateString('en-IN', {
+                                                    day: 'numeric',
+                                                    month: 'short',
+                                                    year: 'numeric',
+                                                    hour: '2-digit',
+                                                    minute: '2-digit'
+                                                })}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className={`font-bold text-lg ${tx.points > 0 ? 'text-green-600' : 'text-red-600'
+                                            }`}>
+                                            {tx.points > 0 ? '+' : ''}{tx.points.toLocaleString()} pts
+                                        </p>
+                                        {tx.amount && (
+                                            <p className="text-xs text-muted-foreground">
+                                                ₹{tx.amount.toFixed(2)}
+                                            </p>
+                                        )}
+                                        <Badge variant="outline" className={`text-xs ${tx.status === 'COMPLETED' ? 'border-green-500 text-green-600' :
+                                            tx.status === 'PENDING' ? 'border-amber-500 text-amber-600' :
+                                                'border-gray-500'
+                                            }`}>
+                                            {tx.status}
+                                        </Badge>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </CardContent>
             </Card>
 
@@ -420,6 +579,18 @@ export default function VendorTransactionsPage() {
                                 </div>
 
                                 <div className="space-y-2">
+                                    <Label htmlFor="paypalEmail">PayPal Email Address</Label>
+                                    <Input
+                                        id="paypalEmail"
+                                        type="email"
+                                        placeholder="your-paypal@email.com"
+                                        value={paypalEmail}
+                                        onChange={(e) => setPaypalEmail(e.target.value)}
+                                    />
+                                    <p className="text-xs text-muted-foreground">Money will be sent to this PayPal account</p>
+                                </div>
+
+                                <div className="space-y-2">
                                     <Label htmlFor="withdrawAmount">Points to Withdraw</Label>
                                     <Input
                                         id="withdrawAmount"
@@ -452,7 +623,7 @@ export default function VendorTransactionsPage() {
                                 </Button>
                                 <Button
                                     onClick={handleWithdraw}
-                                    disabled={withdrawLoading || !withdrawAmount}
+                                    disabled={withdrawLoading || !withdrawAmount || !paypalEmail}
                                     className="bg-gradient-to-r from-amber-500 to-orange-600"
                                 >
                                     {withdrawLoading ? "Processing..." : "Confirm Withdrawal"}

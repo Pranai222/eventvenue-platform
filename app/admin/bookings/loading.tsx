@@ -1,4 +1,4 @@
-export default function Loading() {
+﻿export default function Loading() {
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="animate-pulse space-y-4">

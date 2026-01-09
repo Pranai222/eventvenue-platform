@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
@@ -40,7 +40,7 @@ export default function AdminDashboardPage() {
         try {
           const bookingsResponse = await adminApi.getAllBookings()
           const bookings = Array.isArray(bookingsResponse) ? bookingsResponse : (bookingsResponse as any)?.data || []
-          // Sort by createdAt descending and take top 3
+          // Sort by createdAt descending and take top 3 for display
           const sortedBookings = bookings
             .sort((a: BookingData, b: BookingData) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
             .slice(0, 3)
@@ -187,7 +187,7 @@ export default function AdminDashboardPage() {
             <DollarSign className="h-4 w-4 text-accent" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${stats?.totalRevenue?.toFixed(2) || "0.00"}</div>
+            <div className="text-2xl font-bold">₹{stats?.totalRevenue?.toFixed(2) || "0.00"}</div>
             <p className="text-xs text-muted-foreground">Platform earnings</p>
           </CardContent>
         </Card>
@@ -264,7 +264,7 @@ export default function AdminDashboardPage() {
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="font-medium text-sm">${Number(booking.totalAmount).toFixed(2)}</p>
+                      <p className="font-medium text-sm">₹{Number(booking.totalAmount).toFixed(2)}</p>
                       <Badge variant={booking.status === "CONFIRMED" ? "default" : booking.status === "CANCELLED" ? "destructive" : "secondary"} className="text-xs">
                         {booking.status}
                       </Badge>
@@ -272,6 +272,13 @@ export default function AdminDashboardPage() {
                   </div>
                 ))}
               </div>
+            )}
+            {recentBookings.length > 0 && (
+              <Link href="/admin/bookings" className="block mt-4">
+                <Button variant="outline" className="w-full">
+                  View All Bookings
+                </Button>
+              </Link>
             )}
           </CardContent>
         </Card>
@@ -302,7 +309,7 @@ export default function AdminDashboardPage() {
                       <p className="text-xs text-muted-foreground">{venue.city}</p>
                     </div>
                     <div className="text-right">
-                      <p className="font-medium text-sm">${venue.pricePerHour}/hr</p>
+                      <p className="font-medium text-sm">₹{venue.pricePerHour}/hr</p>
                       <Badge variant={venue.isAvailable ? "default" : "secondary"} className="text-xs">
                         {venue.isAvailable ? "Available" : "Unavailable"}
                       </Badge>
@@ -335,11 +342,11 @@ export default function AdminDashboardPage() {
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm truncate">{event.name}</p>
                       <p className="text-xs text-muted-foreground">
-                        {new Date(event.date).toLocaleDateString()}
+                        {event.eventDate ? new Date(event.eventDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'No date set'}
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="font-medium text-sm">${event.pricePerTicket}</p>
+                      <p className="font-medium text-sm">₹{event.pricePerTicket}</p>
                       <Badge variant={event.status === "PUBLISHED" ? "default" : "secondary"} className="text-xs">
                         {event.status}
                       </Badge>

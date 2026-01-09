@@ -17,6 +17,13 @@ export interface ConversionRate {
   pointsPerDollar: number
 }
 
+export interface PlatformFees {
+  userPlatformFeePoints: number
+  venueCreationPoints: number
+  eventCreationPointsQuantity: number
+  eventCreationPointsSeat: number
+}
+
 export interface VendorData {
   id?: number
   email: string
@@ -70,6 +77,11 @@ export const adminApi = {
   getConversionRate: () => apiClient.get<ConversionRate>("/api/admin/settings/conversion-rate"),
   updateConversionRate: (pointsPerDollar: number) =>
     apiClient.put<ConversionRate>("/api/admin/settings/conversion-rate", { pointsPerDollar }),
+
+  // Platform fees
+  getPlatformFees: () => apiClient.get<PlatformFees>("/api/admin/settings/platform-fees"),
+  updatePlatformFees: (fees: PlatformFees) =>
+    apiClient.put<PlatformFees>("/api/admin/settings/platform-fees", fees),
 
   // Audit logs
   getAuditLogs: () => apiClient.get<{ success: boolean; data: AuditLog[] }>("/api/admin/audit-logs"),

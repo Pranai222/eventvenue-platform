@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -37,7 +37,7 @@ function FAQContent() {
     },
     {
       question: "How can I contact customer support?",
-      answer: "You can reach our support team via email at support@eventvenue.com or call us at 1-800-VENUE-1.",
+      answer: "You can reach our support team via email at pranaib20@gmail.com or call us at 1-800-VENUE-1.",
     },
   ]
 
@@ -122,7 +122,7 @@ export default function HelpPage() {
                 <Mail className="h-6 w-6 text-primary flex-shrink-0" />
                 <div>
                   <h3 className="font-semibold">Email Support</h3>
-                  <p className="text-sm text-muted-foreground">support@eventvenue.com</p>
+                  <p className="text-sm text-muted-foreground">pranaib20@gmail.com</p>
                 </div>
               </div>
               <div className="flex items-start gap-4">

@@ -72,7 +72,7 @@ public class Vendor {
         isActive = true;
         totalVenues = 0;
         rating = 0.0;
-        points = 0L;
+        points = 200L; // Welcome bonus - same as users
     }
 
     @PreUpdate

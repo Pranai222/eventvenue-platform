@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
@@ -31,6 +31,26 @@ export default function VendorEventsPage() {
   const [isCancelling, setIsCancelling] = useState(false)
 
   useEffect(() => {
+    // Check for auth token first
+    const token = localStorage.getItem("auth_token")
+    const userStr = localStorage.getItem("auth_user")
+
+    if (!token || !userStr) {
+      window.location.href = "/login?role=vendor"
+      return
+    }
+
+    try {
+      const user = JSON.parse(userStr)
+      if (user.role !== "VENDOR") {
+        window.location.href = "/login?role=vendor"
+        return
+      }
+    } catch {
+      window.location.href = "/login?role=vendor"
+      return
+    }
+
     eventsApi
       .getVendorEvents()
       .then((data) => {
