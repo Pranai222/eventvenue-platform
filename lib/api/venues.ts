@@ -31,7 +31,7 @@ const convertToVenue = (data: VenueData): Venue => ({
   vendorId: data.vendorId,
   name: data.name,
   description: data.description,
-  location: `${data.city}, ${data.address}`,
+  location: data.address,
   city: data.city,
   address: data.address,
   capacity: data.capacity,
