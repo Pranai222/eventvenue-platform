@@ -4,18 +4,9 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import { XMarkIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import dynamic from 'next/dynamic'
 import 'leaflet/dist/leaflet.css'
-import L from 'leaflet'
+// import L from 'leaflet' - Removed to prevent SSR issues
 
-// Fix for default markers
-const icon = L.icon({
-    iconUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png",
-    iconRetinaUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png",
-    shadowUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png",
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
-    popupAnchor: [1, -34],
-    shadowSize: [41, 41]
-});
+// Fix for default markers - moved inside component
 
 // Dynamically import map components
 const MapContainer = dynamic(
@@ -76,6 +67,7 @@ export default function MapModal({ currentAddress, onSelect, onClose }: MapModal
     const [query, setQuery] = useState(currentAddress || "")
     const [selectedAddress, setSelectedAddress] = useState(currentAddress || "")
     const [isSearching, setIsSearching] = useState(false)
+    const [leafletIcon, setLeafletIcon] = useState<any>(null)
 
     // Debounce the search query
     const debouncedQuery = useDebounce(query, 1500)
@@ -85,6 +77,20 @@ export default function MapModal({ currentAddress, onSelect, onClose }: MapModal
         if (currentAddress) {
             handleSearch(currentAddress)
         }
+
+        // Dynamically load Leaflet for icon to prevent SSR issues
+        import('leaflet').then((L) => {
+            const icon = L.icon({
+                iconUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png",
+                iconRetinaUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png",
+                shadowUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png",
+                iconSize: [25, 41],
+                iconAnchor: [12, 41],
+                popupAnchor: [1, -34],
+                shadowSize: [41, 41]
+            });
+            setLeafletIcon(icon)
+        })
     }, [])
 
     // Effect: Trigger search when debounced query changes
@@ -193,7 +199,7 @@ export default function MapModal({ currentAddress, onSelect, onClose }: MapModal
                             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                         />
-                        <Marker position={markerPos} icon={icon} />
+                        {leafletIcon && <Marker position={markerPos} icon={leafletIcon} />}
                         <MapEvents onMapClick={handleMapClick} />
                         <ChangeView center={center} zoom={13} />
                     </MapContainer>
