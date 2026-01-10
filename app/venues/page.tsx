@@ -27,7 +27,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import ViewLocationMap from "@/components/view-location-map"
+import dynamic from "next/dynamic"
+const ViewLocationMap = dynamic(() => import("@/components/view-location-map"), { ssr: false })
 
 const VENUE_TYPES = [
   "All Types",

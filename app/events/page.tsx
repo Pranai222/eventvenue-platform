@@ -21,7 +21,8 @@ import { Calendar, MapPin, Ticket, Search, User, SlidersHorizontal, X, DollarSig
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import type { Event } from "@/lib/types/booking"
-import ViewLocationMap from "@/components/view-location-map"
+import dynamic from "next/dynamic"
+const ViewLocationMap = dynamic(() => import("@/components/view-location-map"), { ssr: false })
 
 const EVENT_CATEGORIES = [
   "All Categories",

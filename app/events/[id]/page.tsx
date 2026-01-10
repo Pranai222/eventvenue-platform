@@ -18,7 +18,8 @@ import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Calendar, MapPin, Users, Ticket, ArrowLeft, CheckCircle, AlertCircle, Armchair, Phone, Mail, Building2 } from "lucide-react"
 import type { Event, SeatLayout } from "@/lib/types/booking"
-import ViewLocationMap from "@/components/view-location-map"
+import dynamic from "next/dynamic"
+const ViewLocationMap = dynamic(() => import("@/components/view-location-map"), { ssr: false })
 
 export default function EventDetailPage() {
   const params = useParams()

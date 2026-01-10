@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { MapPinIcon } from '@heroicons/react/24/outline'
-import MapModal from './map-modal'
+import dynamic from "next/dynamic"
+const MapModal = dynamic(() => import('./map-modal'), { ssr: false })
 
 interface LocationPickerProps {
     value: string

@@ -14,7 +14,8 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Calendar, MapPin, Users, Star, ArrowLeft, Wifi, Coffee, Utensils, Phone, Mail, Building2 } from "lucide-react"
 import type { Venue } from "@/lib/types/booking"
-import ViewLocationMap from "@/components/view-location-map"
+import dynamic from "next/dynamic"
+const ViewLocationMap = dynamic(() => import("@/components/view-location-map"), { ssr: false })
 
 export default function VenueDetailPage() {
   const params = useParams()
