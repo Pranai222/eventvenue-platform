@@ -7,6 +7,7 @@ import { ConversionRateProvider } from "@/lib/contexts/conversion-rate-context"
 import { PlatformFeesProvider } from "@/lib/contexts/platform-fees-context"
 import { AIChatButton } from "@/components/ai/ai-chat-button"
 import "./globals.css"
+import "leaflet/dist/leaflet.css"
 
 const inter = Inter({ subsets: ["latin"] })
 const poppins = Poppins({

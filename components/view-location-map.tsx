@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { XMarkIcon } from '@heroicons/react/24/outline'
 import dynamic from 'next/dynamic'
-import 'leaflet/dist/leaflet.css'
+// import 'leaflet/dist/leaflet.css' - Moved to layout.tsx
 // import L from 'leaflet' - Removed to prevent SSR window error
 
 // Fix for default markers - Moved inside component
